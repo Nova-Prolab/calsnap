@@ -19,6 +19,11 @@ export interface Meal {
   ingredients?: MealIngredient[];
   healthScore?: number; // Scale of 0-10
   isFavorite?: boolean;
+  calorieExplanation?: string;
+  proteinExplanation?: string;
+  fatExplanation?: string;
+  carbohydratesExplanation?: string;
+  healthScoreExplanation?: string;
 }
 
 export interface DailyTotals {

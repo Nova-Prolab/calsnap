@@ -165,7 +165,7 @@ export default function MealDetailPage() {
     }
 
     const finalMeal: Meal = {
-      ...meal,
+      ...meal, // This carries over existing explanation fields
       name: editableData.name,
       calories: numCalories,
       protein: numProtein,
@@ -246,14 +246,51 @@ export default function MealDetailPage() {
     );
   }
   
-  const nutrientFields: { key: keyof Omit<EditableMealData, 'name' | 'ingredients' | 'healthScore' | 'isFavorite'>; label: string; unit: string, iconColor: string, iconInitial: string; explanation: string }[] = [
-    { key: 'calories', label: 'Calories', unit: 'kcal', iconColor: 'bg-primary', iconInitial: 'C', explanation: "Calories are a measure of energy. Your body needs them to function. This is the total estimated energy from this meal." },
-    { key: 'protein', label: 'Protein', unit: 'g', iconColor: 'bg-chart-1', iconInitial: 'P', explanation: "Protein is essential for building and repairing tissues, like muscles. It also helps you feel full. This is the estimated amount of protein in this meal." },
-    { key: 'fat', label: 'Fat', unit: 'g', iconColor: 'bg-chart-4', iconInitial: 'F', explanation: "Fats are a source of energy and help absorb certain vitamins. Healthy fats are important for brain health. This is the estimated amount of fat in this meal." },
-    { key: 'carbohydrates', label: 'Carbs', unit: 'g', iconColor: 'bg-chart-3', iconInitial: 'C', explanation: "Carbohydrates are your body's main source of fuel, especially for your brain and during exercise. This is the estimated amount of carbs in this meal." },
+  const nutrientFields: { 
+    key: keyof Omit<EditableMealData, 'name' | 'ingredients' | 'healthScore' | 'isFavorite'>; 
+    label: string; 
+    unit: string; 
+    iconColor: string; 
+    iconInitial: string; 
+    explanationKey: keyof Meal; 
+    defaultExplanation: string;
+  }[] = [
+    { 
+      key: 'calories', 
+      label: 'Calories', 
+      unit: 'kcal', 
+      iconColor: 'bg-primary', 
+      iconInitial: 'C', 
+      explanationKey: 'calorieExplanation', 
+      defaultExplanation: "Calories are a measure of energy. Your body needs them to function. This is the total estimated energy from this meal." 
+    },
+    { 
+      key: 'protein', 
+      label: 'Protein', 
+      unit: 'g', 
+      iconColor: 'bg-chart-1', 
+      iconInitial: 'P', 
+      explanationKey: 'proteinExplanation', 
+      defaultExplanation: "Protein is essential for building and repairing tissues, like muscles. It also helps you feel full. This is the estimated amount of protein in this meal." },
+    { 
+      key: 'fat', 
+      label: 'Fat', 
+      unit: 'g', 
+      iconColor: 'bg-chart-4', 
+      iconInitial: 'F', 
+      explanationKey: 'fatExplanation', 
+      defaultExplanation: "Fats are a source of energy and help absorb certain vitamins. Healthy fats are important for brain health. This is the estimated amount of fat in this meal." },
+    { 
+      key: 'carbohydrates', 
+      label: 'Carbs', 
+      unit: 'g', 
+      iconColor: 'bg-chart-3', 
+      iconInitial: 'C', 
+      explanationKey: 'carbohydratesExplanation', 
+      defaultExplanation: "Carbohydrates are your body's main source of fuel, especially for your brain and during exercise. This is the estimated amount of carbs in this meal." },
   ];
 
-  const healthScoreExplanation = "The Health Score (0-10) is an AI-generated estimate of this meal's nutritional quality, considering factors like ingredient balance and processing. A higher score suggests a healthier meal.";
+  const defaultHealthScoreExplanation = "The Health Score (0-10) is an AI-generated estimate of this meal's nutritional quality, considering factors like ingredient balance and processing. A higher score suggests a healthier meal.";
 
 
   return (
@@ -324,7 +361,7 @@ export default function MealDetailPage() {
         
         <div className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            {nutrientFields.map(({ key, label, unit, iconColor, iconInitial, explanation }) => (
+            {nutrientFields.map(({ key, label, unit, iconColor, iconInitial, explanationKey, defaultExplanation }) => (
               <Card key={key} className="shadow-md rounded-xl">
                 <CardContent className="p-3">
                   <Label className="text-xs text-muted-foreground mb-1 block">{label}</Label>
@@ -360,9 +397,9 @@ export default function MealDetailPage() {
                         )}
                       </div>
                     </PopoverTrigger>
-                    <PopoverContent className="w-64 text-sm">
+                    <PopoverContent side="bottom" align="start" className="w-64 text-sm shadow-xl">
                       <h4 className="font-semibold mb-1">{label}</h4>
-                      <p className="text-muted-foreground">{explanation}</p>
+                      <p className="text-muted-foreground">{meal[explanationKey] || defaultExplanation}</p>
                     </PopoverContent>
                   </Popover>
                 </CardContent>
@@ -382,9 +419,9 @@ export default function MealDetailPage() {
                             </span>
                         </div>
                     </PopoverTrigger>
-                    <PopoverContent className="w-64 text-sm">
+                    <PopoverContent side="bottom" align="start" className="w-64 text-sm shadow-xl">
                         <h4 className="font-semibold mb-1">Health Score</h4>
-                        <p className="text-muted-foreground">{healthScoreExplanation}</p>
+                        <p className="text-muted-foreground">{meal.healthScoreExplanation || defaultHealthScoreExplanation}</p>
                     </PopoverContent>
                 </Popover>
               </CardContent>
@@ -460,4 +497,3 @@ export default function MealDetailPage() {
     </AppWrapper>
   );
 }
-

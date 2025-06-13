@@ -212,6 +212,11 @@ export function CalorieEstimationForm() {
       ingredients: editableData.ingredients || [],
       healthScore: estimationResult.healthScore, // Use original from AI
       isFavorite: false, // Default new meals are not favorite
+      calorieExplanation: estimationResult.calorieExplanation,
+      proteinExplanation: estimationResult.proteinExplanation,
+      fatExplanation: estimationResult.fatExplanation,
+      carbohydratesExplanation: estimationResult.carbohydratesExplanation,
+      healthScoreExplanation: estimationResult.healthScoreExplanation,
     };
 
     const existingMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);

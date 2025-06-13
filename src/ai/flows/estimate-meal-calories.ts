@@ -36,6 +36,11 @@ const EstimateMealCaloriesOutputSchema = z.object({
     fat: z.number().describe('The estimated fat content of the meal in grams.'),
     carbohydrates: z.number().describe('The estimated carbohydrate content of the meal in grams.'),
   }).describe('The estimated macronutrient breakdown of the meal.'),
+  calorieExplanation: z.string().optional().describe("A brief explanation for the meal's estimated calorie count."),
+  proteinExplanation: z.string().optional().describe("A brief explanation for the meal's estimated protein content."),
+  fatExplanation: z.string().optional().describe("A brief explanation for the meal's estimated fat content."),
+  carbohydratesExplanation: z.string().optional().describe("A brief explanation for the meal's estimated carbohydrate content."),
+  healthScoreExplanation: z.string().optional().describe("A brief explanation for the meal's health score, if provided."),
   ingredients: z.array(IngredientSchema).optional().describe('A list of identified ingredients with their estimated quantity, unit, and calorie counts, if available.'),
   healthScore: z.number().min(0).max(10).optional().describe('A health score for the meal from 0 to 10 (e.g., 8), where 10 is very healthy. Base this on nutritional balance, processing level, etc.'),
 });
@@ -49,7 +54,7 @@ const prompt = ai.definePrompt({
   name: 'estimateMealCaloriesPrompt',
   input: {schema: EstimateMealCaloriesInputSchema},
   output: {schema: EstimateMealCaloriesOutputSchema},
-  prompt: `You are an AI assistant that estimates the calorie count, macronutrient breakdown, suggests a name, lists ingredients, and provides a health score for a meal from a photo.
+  prompt: `You are an AI assistant that estimates the calorie count, macronutrient breakdown, suggests a name, lists ingredients, provides a health score, and offers brief explanations for these estimations for a meal from a photo.
 
   Analyze the following photo of a meal and provide:
   1. A suggested short, descriptive name for the meal (e.g., "Chicken Salad", "Spaghetti Bolognese").
@@ -57,17 +62,18 @@ const prompt = ai.definePrompt({
   3. Its macronutrient breakdown (protein, fat, and carbohydrates in grams).
   4. A list of identified ingredients. For each ingredient, provide its name, estimated quantity (e.g., "100", "1/2", "2"), the unit for the quantity (e.g., "g", "cup", "oz", "piece", "slice"), and an estimated calorie count if possible. Format this as an array of objects.
   5. A health score from 0 to 10, considering nutritional balance and food quality.
+  6. Brief, one-sentence explanations for why the meal received its estimated calorie count, protein, fat, carbohydrates, and health score.
 
   Photo: {{media url=photoDataUri}}
 
   Ensure the calorie estimate and macronutrient breakdown are realistic and appropriate for the meal depicted in the photo.
   The suggested name should be concise and accurately reflect the meal.
-  The ingredient list should be as accurate as possible based on the visual information, including quantity and unit where applicable.
+  The ingredient list should be as accurate as possible.
   The health score should be an integer between 0 and 10.
+  The explanations should be concise and directly related to the visual information and common nutritional knowledge.
 
-  Output the suggested name, calorie estimate as a number, the macronutrient breakdown as an object with protein, fat, and carbohydrates (each as a number in grams), the list of ingredients, and the health score according to the schema.
-
-  Follow the schema provided. Do not include any additional information or explanations in your response.
+  Output all information according to the schema.
+  Follow the schema provided. Do not include any additional information or explanations in your response beyond what is requested in the schema fields.
   `,
 });
 
