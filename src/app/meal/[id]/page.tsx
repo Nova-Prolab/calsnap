@@ -62,7 +62,7 @@ export default function MealDetailPage() {
   const [editingField, setEditingField] = useState<keyof Omit<EditableMealData, 'ingredients' | 'healthScore' | 'isFavorite'> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [isClientReady, setIsClientReady] = useState(false);
-  const [isLoadingMeal, setIsLoadingMeal] = useState(true); // New state for meal data loading
+  const [isLoadingMeal, setIsLoadingMeal] = useState(true);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export default function MealDetailPage() {
 
   useEffect(() => {
     if (mealId && isClientReady) {
-      setIsLoadingMeal(true); // Start loading meal data
+      setIsLoadingMeal(true);
       const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
       const currentMeal = storedMeals.find(m => m.id === mealId);
       if (currentMeal) {
@@ -93,9 +93,8 @@ export default function MealDetailPage() {
         setEditableData(null);
         setInitialEditableData(null);
       }
-      setIsLoadingMeal(false); // Finish loading meal data
+      setIsLoadingMeal(false);
     } else if (!mealId && isClientReady) {
-      // If mealId is not present but client is ready, stop loading
       setIsLoadingMeal(false);
     }
   }, [mealId, isClientReady]); 
@@ -112,10 +111,29 @@ export default function MealDetailPage() {
   };
   
   const handleToggleFavorite = () => {
-    if (editableData) {
-      setEditableData(prev => prev ? { ...prev, isFavorite: !prev.isFavorite } : null);
-      setHasChanges(true);
-    }
+    if (!meal || !editableData) return;
+
+    const newIsFavoriteStatus = !editableData.isFavorite;
+
+    setEditableData(prev => prev ? { ...prev, isFavorite: newIsFavoriteStatus } : null);
+    
+    const updatedMealForStorage: Meal = {
+      ...meal,
+      isFavorite: newIsFavoriteStatus,
+    };
+
+    setMeal(updatedMealForStorage);
+
+    const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
+    const updatedMeals = storedMeals.map(m => m.id === mealId ? updatedMealForStorage : m);
+    setToLocalStorage('calSnapMeals', updatedMeals);
+
+    setInitialEditableData(prev => prev ? { ...prev, isFavorite: newIsFavoriteStatus } : null);
+    
+    toast({
+      title: newIsFavoriteStatus ? "Added to Favorites!" : "Removed from Favorites",
+      icon: newIsFavoriteStatus ? <Heart className="h-5 w-5 text-red-500 fill-red-500" /> : <Heart className="h-5 w-5 text-muted-foreground" />,
+    });
   };
 
   const handleSaveField = (field: keyof Omit<EditableMealData, 'ingredients' | 'healthScore' | 'isFavorite'>) => {
@@ -130,16 +148,25 @@ export default function MealDetailPage() {
       numericValue = parseFloat(updatedMealData[field as keyof Omit<EditableMealData, 'name' | 'ingredients' | 'healthScore' | 'isFavorite'>]);
       if (isNaN(numericValue) || numericValue < 0) {
         toast({ variant: "destructive", title: "Invalid Value", description: `Please enter a valid non-negative number for ${field}.`});
-        const originalValue = meal[field as keyof Meal] ?? (initialEditableData?.[field as keyof EditableMealData] ?? '');
-        setEditableData(prev => prev ? {...prev, [field]: originalValue.toString()} : null);
+        // Revert only the specific invalid field in editableData to its initial state
+        const originalFieldValue = initialEditableData?.[field as keyof EditableMealData] ?? '';
+        setEditableData(prev => prev ? {...prev, [field]: originalFieldValue.toString()} : null);
         valid = false;
       }
     }
     
     if (valid) {
-      setEditableData(updatedMealData);
+      // Field is valid, keep editableData as is, which now contains the valid change
       setEditingField(null);
       setHasChanges(true); 
+    } else {
+      // If invalid, editableData for this field was reverted.
+      // Check if other changes still exist
+      const otherChangesExist = Object.keys(editableData).some(key => 
+        key !== field && editableData[key as keyof EditableMealData] !== initialEditableData?.[key as keyof EditableMealData]
+      );
+      setHasChanges(otherChangesExist);
+      setEditingField(null);
     }
   };
 
@@ -171,7 +198,7 @@ export default function MealDetailPage() {
     }
 
     const finalMeal: Meal = {
-      ...meal,
+      ...meal, // Base this on the meal state which already has the persisted favorite status
       name: editableData.name,
       calories: numCalories,
       protein: numProtein,
@@ -179,7 +206,7 @@ export default function MealDetailPage() {
       carbohydrates: numCarbs,
       ingredients: editableData.ingredients,
       healthScore: numHealthScore,
-      isFavorite: editableData.isFavorite,
+      isFavorite: editableData.isFavorite, // ensure editableData's favorite is used as it's what user sees
     };
     
     setMeal(finalMeal);
@@ -204,6 +231,8 @@ export default function MealDetailPage() {
 
   const handleRevertChanges = () => {
     if (initialEditableData) {
+      // When reverting, ensure the favorite status from initialEditableData is used,
+      // as it reflects the last persisted state (including immediate favorite toggles).
       setEditableData(initialEditableData);
       setHasChanges(false);
       setEditingField(null);
@@ -211,7 +240,7 @@ export default function MealDetailPage() {
     }
   };
 
-  if (isLoadingMeal) { // Primary loading check
+  if (isLoadingMeal) {
     return (
       <AppWrapper className="bg-background text-foreground flex items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -220,7 +249,7 @@ export default function MealDetailPage() {
     );
   }
 
-  if (!mealId && isClientReady) { // Check for mealId after initial loading and client readiness
+  if (!mealId && isClientReady) {
     return (
       <AppWrapper className="bg-background text-foreground flex items-center justify-center p-6">
         <Card className="w-full max-w-md text-center">
@@ -236,7 +265,7 @@ export default function MealDetailPage() {
     );
   }
 
-  if (!meal || !editableData) { // Show "Meal Not Found" only if not loading and meal is truly missing
+  if (!meal || !editableData) {
      return (
         <AppWrapper className="bg-background text-foreground flex items-center justify-center p-6">
             <Card className="w-full max-w-md text-center">
