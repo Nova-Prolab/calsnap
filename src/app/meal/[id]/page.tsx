@@ -36,9 +36,14 @@ export default function MealDetailPage() {
   const [editableData, setEditableData] = useState<EditableMealData | null>(null);
   const [editingField, setEditingField] = useState<keyof Omit<EditableMealData, 'ingredients'> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isClientReady, setIsClientReady] = useState(false);
 
   useEffect(() => {
-    if (mealId) {
+    setIsClientReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (mealId && isClientReady) {
       const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
       const currentMeal = storedMeals.find(m => m.id === mealId);
       if (currentMeal) {
@@ -51,9 +56,12 @@ export default function MealDetailPage() {
           carbohydrates: currentMeal.carbohydrates.toString(),
           ingredients: currentMeal.ingredients || [],
         });
+      } else {
+        setMeal(null); // Explicitly set to null if not found on client
+        setEditableData(null);
       }
     }
-  }, [mealId]); 
+  }, [mealId, isClientReady, toast]); 
 
   const handleEdit = (field: keyof Omit<EditableMealData, 'ingredients'>) => {
     setEditingField(field);
@@ -134,6 +142,14 @@ export default function MealDetailPage() {
     toast({ title: "Changes Saved", description: "Meal details have been updated.", icon: <CheckCircle className="h-5 w-5 text-green-500" /> });
   };
 
+  if (!isClientReady) {
+    // Render a consistent loading state for SSR and initial client render
+    return (
+      <AppWrapper className="bg-card text-card-foreground flex items-center justify-center">
+        <p>Loading meal details...</p>
+      </AppWrapper>
+    );
+  }
 
   if (!mealId) {
     return (
@@ -151,28 +167,27 @@ export default function MealDetailPage() {
     );
   }
 
-  if (!meal || !editableData) {
-    const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
-    const currentMealCheck = storedMeals.find(m => m.id === mealId);
-    if (!currentMealCheck && mealId) { 
-         return (
-            <AppWrapper className="bg-card text-card-foreground flex items-center justify-center p-6">
-                <Card className="w-full max-w-md text-center">
-                    <CardHeader>
-                        <CardTitle className="flex items-center justify-center"><AlertTriangle className="mr-2 h-6 w-6 text-destructive" /> Meal Not Found</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-muted-foreground mb-4">The meal with ID <code className="bg-muted px-1 rounded">{mealId}</code> could not be found.</p>
-                        <p className="text-sm text-muted-foreground mb-4">It might have been deleted or the link is incorrect.</p>
-                        <Button onClick={() => router.push('/dashboard')}>Go to Dashboard</Button>
-                    </CardContent>
-                </Card>
-            </AppWrapper>
-        );
-    }
+  if (!meal) { // This check now happens after client is ready
+     return (
+        <AppWrapper className="bg-card text-card-foreground flex items-center justify-center p-6">
+            <Card className="w-full max-w-md text-center">
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-center"><AlertTriangle className="mr-2 h-6 w-6 text-destructive" /> Meal Not Found</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-muted-foreground mb-4">The meal with ID <code className="bg-muted px-1 rounded">{mealId}</code> could not be found.</p>
+                    <p className="text-sm text-muted-foreground mb-4">It might have been deleted or the link is incorrect.</p>
+                    <Button onClick={() => router.push('/dashboard')}>Go to Dashboard</Button>
+                </CardContent>
+            </Card>
+        </AppWrapper>
+    );
+  }
+  
+  if (!editableData) { // Fallback if meal is somehow set but editableData isn't
     return (
       <AppWrapper className="bg-card text-card-foreground flex items-center justify-center">
-        <p>Loading meal details...</p>
+        <p>Preparing meal data...</p>
       </AppWrapper>
     );
   }
@@ -183,7 +198,6 @@ export default function MealDetailPage() {
     { key: 'fat', label: 'Fat', unit: 'g', iconColor: 'bg-chart-4', iconInitial: 'F' },
     { key: 'carbohydrates', label: 'Carbs', unit: 'g', iconColor: 'bg-chart-3', iconInitial: 'C' },
   ];
-
 
   return (
     <AppWrapper className="bg-background">
