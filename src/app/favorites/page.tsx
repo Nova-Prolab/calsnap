@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ChevronLeft, Heart, Utensils, AlertTriangle, Trash2 } from 'lucide-react';
+import { ChevronLeft, Heart, Utensils, AlertTriangle, Trash2, Loader2 } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
