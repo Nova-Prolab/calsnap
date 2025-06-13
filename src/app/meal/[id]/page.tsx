@@ -31,6 +31,11 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from '@/lib/utils';
 
 interface EditableMealData {
@@ -80,7 +85,7 @@ export default function MealDetailPage() {
           isFavorite: currentMeal.isFavorite || false,
         };
         setEditableData(currentEditableData);
-        setInitialEditableData(currentEditableData); // Store initial state for revert
+        setInitialEditableData(currentEditableData);
       } else {
         setMeal(null); 
         setEditableData(null);
@@ -176,7 +181,7 @@ export default function MealDetailPage() {
     const updatedMeals = storedMeals.map(m => m.id === mealId ? finalMeal : m);
     setToLocalStorage('calSnapMeals', updatedMeals);
     
-    setInitialEditableData(editableData); // Update initial state to current saved state
+    setInitialEditableData(editableData); 
     setHasChanges(false);
     setEditingField(null); 
     toast({ title: "Changes Saved", description: "Meal details have been updated.", icon: <CheckCircle className="h-5 w-5 text-green-500" /> });
@@ -241,12 +246,15 @@ export default function MealDetailPage() {
     );
   }
   
-  const nutrientFields: { key: keyof Omit<EditableMealData, 'name' | 'ingredients' | 'healthScore' | 'isFavorite'>; label: string; unit: string, iconColor: string, iconInitial: string }[] = [
-    { key: 'calories', label: 'Calories', unit: 'kcal', iconColor: 'bg-primary', iconInitial: 'C' },
-    { key: 'protein', label: 'Protein', unit: 'g', iconColor: 'bg-chart-1', iconInitial: 'P' },
-    { key: 'fat', label: 'Fat', unit: 'g', iconColor: 'bg-chart-4', iconInitial: 'F' },
-    { key: 'carbohydrates', label: 'Carbs', unit: 'g', iconColor: 'bg-chart-3', iconInitial: 'C' },
+  const nutrientFields: { key: keyof Omit<EditableMealData, 'name' | 'ingredients' | 'healthScore' | 'isFavorite'>; label: string; unit: string, iconColor: string, iconInitial: string; explanation: string }[] = [
+    { key: 'calories', label: 'Calories', unit: 'kcal', iconColor: 'bg-primary', iconInitial: 'C', explanation: "Calories are a measure of energy. Your body needs them to function. This is the total estimated energy from this meal." },
+    { key: 'protein', label: 'Protein', unit: 'g', iconColor: 'bg-chart-1', iconInitial: 'P', explanation: "Protein is essential for building and repairing tissues, like muscles. It also helps you feel full. This is the estimated amount of protein in this meal." },
+    { key: 'fat', label: 'Fat', unit: 'g', iconColor: 'bg-chart-4', iconInitial: 'F', explanation: "Fats are a source of energy and help absorb certain vitamins. Healthy fats are important for brain health. This is the estimated amount of fat in this meal." },
+    { key: 'carbohydrates', label: 'Carbs', unit: 'g', iconColor: 'bg-chart-3', iconInitial: 'C', explanation: "Carbohydrates are your body's main source of fuel, especially for your brain and during exercise. This is the estimated amount of carbs in this meal." },
   ];
+
+  const healthScoreExplanation = "The Health Score (0-10) is an AI-generated estimate of this meal's nutritional quality, considering factors like ingredient balance and processing. A higher score suggests a healthier meal.";
+
 
   return (
     <AppWrapper className="bg-background">
@@ -315,54 +323,71 @@ export default function MealDetailPage() {
         )}
         
         <div className="p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          {nutrientFields.map(({ key, label, unit, iconColor, iconInitial }) => (
-            <Card key={key} className="shadow-md rounded-xl">
-              <CardContent className="p-3">
-                 <Label className="text-xs text-muted-foreground mb-1 block">{label}</Label>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                     <div className={`w-7 h-7 rounded-full ${iconColor} flex items-center justify-center text-primary-foreground font-semibold text-xs mr-2`}>
-                      {iconInitial}
-                    </div>
-                    {editingField === key ? (
-                      <Input
-                        type="number"
-                        value={editableData[key]}
-                        onChange={(e) => handleInputChange(key, e.target.value)}
-                        onBlur={() => handleSaveField(key)}
-                        autoFocus
-                        className="w-20 text-left text-md font-semibold h-auto p-1"
-                        min="0"
-                      />
-                    ) : (
-                      <span onClick={() => handleEdit(key)} className="text-md font-semibold cursor-pointer hover:opacity-75">
-                        {editableData[key]}
-                      </span>
-                    )}
-                    <span className="text-xs text-muted-foreground ml-1">{unit}</span>
-                  </div>
-                  {editingField !== key && (
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(key)} className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                            <Edit3 size={14} />
-                        </Button>
-                    )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-            <Card className="shadow-md rounded-xl">
+          <div className="grid grid-cols-2 gap-4">
+            {nutrientFields.map(({ key, label, unit, iconColor, iconInitial, explanation }) => (
+              <Card key={key} className="shadow-md rounded-xl">
                 <CardContent className="p-3">
-                    <Label className="text-xs text-muted-foreground mb-1 block">Health Score</Label>
-                    <div className="flex items-center">
-                        <div className={`w-7 h-7 rounded-full bg-pink-500 flex items-center justify-center text-primary-foreground font-semibold text-xs mr-2`}>
-                            <Heart size={14} className="fill-white" />
+                  <Label className="text-xs text-muted-foreground mb-1 block">{label}</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <div className="flex items-center justify-between cursor-pointer group">
+                        <div className="flex items-center">
+                          <div className={`w-7 h-7 rounded-full ${iconColor} flex items-center justify-center text-primary-foreground font-semibold text-xs mr-2`}>
+                            {iconInitial}
+                          </div>
+                          {editingField === key ? (
+                            <Input
+                              type="number"
+                              value={editableData[key]}
+                              onChange={(e) => handleInputChange(key, e.target.value)}
+                              onBlur={() => handleSaveField(key)}
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-20 text-left text-md font-semibold h-auto p-1"
+                              min="0"
+                            />
+                          ) : (
+                            <span className="text-md font-semibold group-hover:opacity-75">
+                              {editableData[key]}
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground ml-1">{unit}</span>
                         </div>
-                        <span className="text-md font-semibold">
-                            {editableData.healthScore !== 'N/A' ? `${editableData.healthScore} / 10` : 'N/A'}
-                        </span>
-                    </div>
+                        {editingField !== key && (
+                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); handleEdit(key); }} className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                            <Edit3 size={14} />
+                          </Button>
+                        )}
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 text-sm">
+                      <h4 className="font-semibold mb-1">{label}</h4>
+                      <p className="text-muted-foreground">{explanation}</p>
+                    </PopoverContent>
+                  </Popover>
                 </CardContent>
+              </Card>
+            ))}
+            <Card className="shadow-md rounded-xl">
+              <CardContent className="p-3">
+                <Label className="text-xs text-muted-foreground mb-1 block">Health Score</Label>
+                 <Popover>
+                    <PopoverTrigger asChild>
+                        <div className="flex items-center cursor-pointer group">
+                            <div className={`w-7 h-7 rounded-full bg-pink-500 flex items-center justify-center text-primary-foreground font-semibold text-xs mr-2`}>
+                                <Heart size={14} className="fill-white" />
+                            </div>
+                            <span className="text-md font-semibold group-hover:opacity-75">
+                                {editableData.healthScore !== 'N/A' ? `${editableData.healthScore} / 10` : 'N/A'}
+                            </span>
+                        </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 text-sm">
+                        <h4 className="font-semibold mb-1">Health Score</h4>
+                        <p className="text-muted-foreground">{healthScoreExplanation}</p>
+                    </PopoverContent>
+                </Popover>
+              </CardContent>
             </Card>
           </div>
 
