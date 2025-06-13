@@ -71,7 +71,7 @@ export default function FavoritesPage() {
       ...meal,
       id: crypto.randomUUID(), // New ID for the new entry
       timestamp: Date.now(), // Set to current time
-      isFavorite: meal.isFavorite, // Keep its favorite status
+      isFavorite: false, // The new logged instance is not a favorite by default
     };
 
     const existingMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
