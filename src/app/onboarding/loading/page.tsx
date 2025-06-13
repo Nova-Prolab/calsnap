@@ -14,7 +14,6 @@ export default function LoadingScreen() {
       setProgress(prev => {
         if (prev >= 100) {
           clearInterval(timer);
-          router.replace('/dashboard'); // Use replace to prevent going back to loading
           return 100;
         }
         return prev + 2; // Faster progress for demo
@@ -22,7 +21,13 @@ export default function LoadingScreen() {
     }, 50); // Faster interval
     
     return () => clearInterval(timer);
-  }, [router]);
+  }, []);
+
+  useEffect(() => {
+    if (progress >= 100) {
+      router.replace('/dashboard'); // Use replace to prevent going back to loading
+    }
+  }, [progress, router]);
 
   return (
     <AppWrapper className="bg-card text-card-foreground">
