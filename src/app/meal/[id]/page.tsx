@@ -165,7 +165,7 @@ export default function MealDetailPage() {
     }
 
     const finalMeal: Meal = {
-      ...meal, // This carries over existing explanation fields
+      ...meal,
       name: editableData.name,
       calories: numCalories,
       protein: numProtein,
@@ -361,7 +361,7 @@ export default function MealDetailPage() {
         
         <div className="p-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            {nutrientFields.map(({ key, label, unit, iconColor, iconInitial, explanationKey, defaultExplanation }) => (
+            {nutrientFields.map(({ key, label, unit, iconColor, iconInitial, explanationKey, defaultExplanation }, index) => (
               <Card key={key} className="shadow-md rounded-xl">
                 <CardContent className="p-3">
                   <Label className="text-xs text-muted-foreground mb-1 block">{label}</Label>
@@ -397,7 +397,12 @@ export default function MealDetailPage() {
                         )}
                       </div>
                     </PopoverTrigger>
-                    <PopoverContent side="bottom" align="start" className="w-64 text-sm shadow-xl">
+                    <PopoverContent 
+                        side="bottom" 
+                        align={index % 2 === 0 ? 'start' : 'end'} 
+                        className="w-64 text-sm shadow-xl"
+                        sideOffset={5}
+                    >
                       <h4 className="font-semibold mb-1">{label}</h4>
                       <p className="text-muted-foreground">{meal[explanationKey] || defaultExplanation}</p>
                     </PopoverContent>
@@ -419,7 +424,12 @@ export default function MealDetailPage() {
                             </span>
                         </div>
                     </PopoverTrigger>
-                    <PopoverContent side="bottom" align="start" className="w-64 text-sm shadow-xl">
+                    <PopoverContent 
+                        side="top" 
+                        align="start" 
+                        className="w-64 text-sm shadow-xl"
+                        sideOffset={5}
+                    >
                         <h4 className="font-semibold mb-1">Health Score</h4>
                         <p className="text-muted-foreground">{meal.healthScoreExplanation || defaultHealthScoreExplanation}</p>
                     </PopoverContent>
@@ -497,3 +507,4 @@ export default function MealDetailPage() {
     </AppWrapper>
   );
 }
+
