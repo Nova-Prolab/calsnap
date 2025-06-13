@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Camera, Plus, Settings } from 'lucide-react';
+import { User, Camera, Plus } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -136,16 +136,16 @@ export default function DashboardScreen() {
               
               <div className="space-y-3">
                 {[
-                  { name: 'Protein', current: dailyTotals.protein, goal: userGoals.protein, colorClass: 'bg-chart-1' }, // Orange
-                  { name: 'Fat', current: dailyTotals.fat, goal: userGoals.fat, colorClass: 'bg-chart-4' },       // Yellow
-                  { name: 'Carbs', current: dailyTotals.carbohydrates, goal: userGoals.carbohydrates, colorClass: 'bg-chart-3' }, // Blue
+                  { name: 'Protein', current: dailyTotals.protein, goal: userGoals.protein, colorClass: 'bg-chart-1' }, 
+                  { name: 'Fat', current: dailyTotals.fat, goal: userGoals.fat, colorClass: 'bg-chart-4' },       
+                  { name: 'Carbs', current: dailyTotals.carbohydrates, goal: userGoals.carbohydrates, colorClass: 'bg-chart-3' }, 
                 ].map(macro => (
                   <div key={macro.name}>
                     <div className="text-sm font-semibold mb-0.5">{macro.name}</div>
                     <div className="text-xs text-muted-foreground">{Math.round(macro.current)}/{macro.goal}g</div>
                     <Progress 
                       value={macro.goal > 0 ? Math.min((macro.current / macro.goal) * 100, 100) : 0} 
-                      className="w-24 h-1.5 rounded-full" 
+                      className="w-24 h-1.5 rounded-full bg-secondary" 
                       indicatorClassName={macro.colorClass} 
                     />
                   </div>
@@ -169,22 +169,23 @@ export default function DashboardScreen() {
           ) : (
             <div className="space-y-4">
               {recentMeals.map(meal => (
-                <Card key={meal.id} className="rounded-2xl shadow-md">
-                  <CardContent className="p-4 flex items-center space-x-4">
-                    {meal.photoDataUri && (
-                      <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} width={64} height={64} className="rounded-lg object-cover" />
-                    )}
-                    <div className="flex-grow">
-                      <p className="font-semibold">{meal.name || `${meal.calories} kcal meal`}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {meal.calories} kcal &bull; P:{meal.protein}g F:{meal.fat}g C:{meal.carbohydrates}g
-                      </p>
-                    </div>
-                     <Button variant="ghost" size="icon" className="text-muted-foreground">
-                        <Settings size={16}/>
-                     </Button>
-                  </CardContent>
-                </Card>
+                <Link href={`/meal/${meal.id}`} key={meal.id} passHref legacyBehavior>
+                  <a className="block">
+                    <Card className="rounded-2xl shadow-md hover:shadow-lg transition-shadow cursor-pointer">
+                      <CardContent className="p-4 flex items-center space-x-4">
+                        {meal.photoDataUri && (
+                          <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} width={64} height={64} className="rounded-lg object-cover" />
+                        )}
+                        <div className="flex-grow">
+                          <p className="font-semibold">{meal.name || `${meal.calories} kcal meal`}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {meal.calories} kcal &bull; P:{meal.protein}g F:{meal.fat}g C:{meal.carbohydrates}g
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </a>
+                </Link>
               ))}
             </div>
           )}

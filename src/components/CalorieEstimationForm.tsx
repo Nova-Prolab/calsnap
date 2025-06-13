@@ -1,10 +1,10 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Camera, Loader2, Send, Edit3 } from 'lucide-react';
+import { Camera, Loader2, Send, Edit3, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,6 +13,8 @@ import { useToast } from '@/hooks/use-toast';
 import { estimateMealCalories, type EstimateMealCaloriesOutput } from '@/ai/flows/estimate-meal-calories';
 import type { Meal } from '@/types';
 import { setToLocalStorage, getFromLocalStorage } from '@/lib/localStorage';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+
 
 interface EditableMealData {
   name: string;
@@ -30,6 +32,11 @@ export function CalorieEstimationForm() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [useCamera, setUseCamera] = useState(false);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   useEffect(() => {
     if (estimationResult) {
@@ -45,28 +52,99 @@ export function CalorieEstimationForm() {
     }
   }, [estimationResult]);
 
+  useEffect(() => {
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [stream]);
+
+  const getCameraPermission = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setStream(mediaStream);
+      setHasCameraPermission(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      setHasCameraPermission(false);
+      toast({
+        variant: 'destructive',
+        title: 'Camera Access Denied',
+        description: 'Please enable camera permissions in your browser settings.',
+      });
+      setUseCamera(false);
+    }
+  };
+
+  const handleToggleCamera = () => {
+    if (!useCamera) {
+      setUseCamera(true);
+      if (hasCameraPermission === null || hasCameraPermission === false) {
+        getCameraPermission();
+      }
+    } else {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+      setStream(null);
+      setUseCamera(false);
+      setPhotoPreview(null);
+      setPhotoDataUri(null);
+    }
+  };
+  
+  const handleCapturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUri = canvas.toDataURL('image/jpeg');
+        setPhotoPreview(dataUri);
+        setPhotoDataUri(dataUri);
+        setEstimationResult(null);
+        setEditableData(null);
+
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+        setStream(null);
+        setUseCamera(false); 
+      }
+    }
+  };
+
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const readerPreview = new FileReader();
-      readerPreview.onloadend = () => {
-        setPhotoPreview(readerPreview.result as string);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUri = reader.result as string;
+        setPhotoPreview(dataUri);
+        setPhotoDataUri(dataUri);
+        setEstimationResult(null); 
+        setEditableData(null);
       };
-      readerPreview.readAsDataURL(file);
-
-      const readerDataUri = new FileReader();
-      readerDataUri.onloadend = () => {
-        setPhotoDataUri(readerDataUri.result as string);
-      };
-      readerDataUri.readAsDataURL(file);
-      setEstimationResult(null); 
-      setEditableData(null);
+      reader.readAsDataURL(file);
+      if (useCamera && stream) { // Turn off camera if file is uploaded
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+        setUseCamera(false);
+      }
     }
   };
 
   const handleEstimate = async () => {
     if (!photoDataUri) {
-      toast({ title: "No photo selected", description: "Please upload a photo of your meal.", variant: "destructive" });
+      toast({ title: "No photo selected", description: "Please upload or take a photo of your meal.", variant: "destructive" });
       return;
     }
     setIsLoading(true);
@@ -90,8 +168,8 @@ export function CalorieEstimationForm() {
   };
 
   const handleLogMeal = () => {
-    if (!editableData) {
-      toast({ title: "No Estimation Data", description: "Please estimate calories first.", variant: "destructive" });
+    if (!editableData || !photoPreview) { // Ensure photoPreview is also present
+      toast({ title: "No Estimation Data", description: "Please estimate calories first and ensure a photo is present.", variant: "destructive" });
       return;
     }
 
@@ -106,10 +184,11 @@ export function CalorieEstimationForm() {
       return;
     }
     
+    const mealId = new Date().toISOString() + '-' + Math.random().toString(36).substring(2, 15);
     const newMeal: Meal = {
-      id: new Date().toISOString(), 
+      id: mealId, 
       name: editableData.name || `Meal at ${new Date().toLocaleTimeString()}`,
-      photoDataUri: photoPreview || undefined,
+      photoDataUri: photoPreview, // Save the preview which is the captured/uploaded image
       calories,
       protein,
       fat,
@@ -120,8 +199,8 @@ export function CalorieEstimationForm() {
     const existingMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
     setToLocalStorage('calSnapMeals', [...existingMeals, newMeal]);
     
-    toast({ title: "Meal Logged!", description: `${newMeal.calories} kcal added to your log.`});
-    router.push('/dashboard');
+    toast({ title: "Meal Logged!", description: `${newMeal.calories} kcal added. Viewing details...`});
+    router.push(`/meal/${mealId}`);
   };
 
   return (
@@ -131,24 +210,53 @@ export function CalorieEstimationForm() {
       </CardHeader>
       <CardContent className="space-y-6">
         <div>
-          <Label htmlFor="meal-photo" className="mb-2 block font-semibold">Meal Photo</Label>
-          <div className="flex items-center justify-center w-full">
-            <label
-              htmlFor="meal-photo-input"
-              className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-secondary hover:bg-muted border-border"
-            >
-              {photoPreview ? (
-                <Image src={photoPreview} alt="Meal preview" width={150} height={150} className="object-contain h-full rounded-lg" />
-              ) : (
-                <div className="flex flex-col items-center justify-center pt-5 pb-6 text-muted-foreground">
-                  <Camera className="w-10 h-10 mb-3" />
-                  <p className="mb-2 text-sm"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                  <p className="text-xs">SVG, PNG, JPG or GIF (MAX. 800x400px)</p>
-                </div>
-              )}
-              <Input id="meal-photo-input" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-            </label>
+          <div className="flex justify-between items-center mb-2">
+            <Label htmlFor="meal-photo" className="font-semibold">Meal Photo</Label>
+            <Button variant="outline" size="sm" onClick={handleToggleCamera}>
+              <Camera className="mr-2 h-4 w-4" />
+              {useCamera ? 'Close Camera' : 'Open Camera'}
+            </Button>
           </div>
+
+          {useCamera && (
+            <div className="mb-4">
+              <video ref={videoRef} className="w-full aspect-video rounded-md bg-secondary" autoPlay muted playsInline />
+              <canvas ref={canvasRef} className="hidden"></canvas>
+              {hasCameraPermission === false && (
+                <Alert variant="destructive" className="mt-2">
+                  <AlertTitle>Camera Access Required</AlertTitle>
+                  <AlertDescription>
+                    Please allow camera access in your browser settings to use this feature. You might need to refresh the page.
+                  </AlertDescription>
+                </Alert>
+              )}
+               {hasCameraPermission === true && !photoPreview && (
+                 <Button onClick={handleCapturePhoto} className="w-full mt-2 bg-accent hover:bg-accent/90">
+                    Capture Photo
+                 </Button>
+                )}
+            </div>
+          )}
+
+          {!useCamera && (
+            <div className="flex items-center justify-center w-full">
+              <label
+                htmlFor="meal-photo-input"
+                className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-secondary hover:bg-muted border-border"
+              >
+                {photoPreview ? (
+                  <Image src={photoPreview} alt="Meal preview" width={150} height={150} className="object-contain h-full rounded-lg" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6 text-muted-foreground">
+                    <Camera className="w-10 h-10 mb-3" />
+                    <p className="mb-2 text-sm"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+                    <p className="text-xs">PNG, JPG, GIF</p>
+                  </div>
+                )}
+                <Input id="meal-photo-input" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+              </label>
+            </div>
+          )}
         </div>
 
         {photoPreview && !estimationResult && !isLoading && (
@@ -158,9 +266,9 @@ export function CalorieEstimationForm() {
           </Button>
         )}
          {isLoading && (
-            <div className="flex justify-center items-center">
+            <div className="flex flex-col justify-center items-center p-4 border rounded-lg bg-secondary/30">
                 <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" />
-                <p className="text-muted-foreground">Estimating...</p>
+                <p className="text-muted-foreground mt-2">AI is estimating your meal...</p>
             </div>
         )}
 
@@ -237,11 +345,10 @@ export function CalorieEstimationForm() {
       {editableData && estimationResult && (
         <CardFooter>
           <Button onClick={handleLogMeal} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-            <Edit3 className="mr-2 h-4 w-4" /> Log This Meal
+            <Save className="mr-2 h-4 w-4" /> Log & View Details
           </Button>
         </CardFooter>
       )}
     </Card>
   );
 }
-
