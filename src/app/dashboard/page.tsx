@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { User, Camera, Plus, AlertTriangle, Trash2 } from 'lucide-react';
@@ -52,8 +52,13 @@ export default function DashboardScreen() {
   const [userGoals, setUserGoals] = useState<CalorieGoals>({ calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isLoadingGoals, setIsLoadingGoals] = useState(true);
+  
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [mealToDeleteId, setMealToDeleteId] = useState<string | null>(null);
+  
+  const [selectedMealForDeletion, setSelectedMealForDeletion] = useState<string | null>(null);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const { toast } = useToast();
 
   const calculateAndSetDailyTotals = (mealsForDate: Meal[]) => {
@@ -104,8 +109,48 @@ export default function DashboardScreen() {
     
     toast({ title: "Meal Deleted", description: "The meal has been removed.", icon: <Trash2 className="h-5 w-5 text-destructive" /> });
     setMealToDeleteId(null);
+    setSelectedMealForDeletion(null); 
     setIsDeleteDialogOpen(false);
   };
+
+  const handleInteractionStart = (mealId: string) => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+    longPressTimerRef.current = setTimeout(() => {
+      setSelectedMealForDeletion(mealId);
+    }, 700); // 700ms for long press
+  };
+
+  const handleInteractionEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (selectedMealForDeletion) {
+        const target = event.target as HTMLElement;
+        const clickedOnMealCard = target.closest(`[data-meal-card-id="${selectedMealForDeletion}"]`);
+        const clickedOnTrashArea = target.closest('#delete-trash-area-dashboard');
+
+        if (!clickedOnMealCard && !clickedOnTrashArea) {
+          setSelectedMealForDeletion(null);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside as unknown as EventListener); // For touch devices
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside as unknown as EventListener);
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+      }
+    };
+  }, [selectedMealForDeletion]);
 
 
   let calorieStatus: { value: number; label: string; isOver: boolean; textColor: string };
@@ -164,7 +209,7 @@ export default function DashboardScreen() {
         </Link>
       </header>
       
-      <main className="p-6 flex-grow overflow-y-auto pb-24">
+      <main className="p-6 flex-grow overflow-y-auto pb-24 relative"> {/* Added relative for trash can positioning */}
         <div className="flex justify-between items-center mb-6">
           {weekDates.map((dateItem) => (
              <DayButton 
@@ -172,7 +217,7 @@ export default function DashboardScreen() {
               day={daysOfWeek[dateItem.getDay()]} 
               date={dateItem.getDate()} 
               isActive={dateItem.toDateString() === currentDate.toDateString()}
-              onClick={() => setCurrentDate(dateItem)}
+              onClick={() => {setSelectedMealForDeletion(null); setCurrentDate(dateItem);}}
             />
           ))}
         </div>
@@ -253,9 +298,24 @@ export default function DashboardScreen() {
           ) : (
             <div className="space-y-4">
               {recentMeals.map(meal => (
-                <Card key={meal.id} className="rounded-2xl shadow-md hover:shadow-lg transition-shadow bg-card">
+                <Card 
+                  key={meal.id} 
+                  data-meal-card-id={meal.id}
+                  className={cn(
+                    "rounded-2xl shadow-md hover:shadow-lg transition-all bg-card cursor-pointer",
+                    selectedMealForDeletion === meal.id && "ring-2 ring-destructive shadow-xl scale-105"
+                  )}
+                  onMouseDown={() => handleInteractionStart(meal.id)}
+                  onMouseUp={handleInteractionEnd}
+                  onTouchStart={() => handleInteractionStart(meal.id)}
+                  onTouchEnd={handleInteractionEnd}
+                  onContextMenu={(e) => {
+                    e.preventDefault(); // Prevents context menu on long press for touch
+                    handleInteractionStart(meal.id); // Ensure selection on contextmenu-like long press
+                  }}
+                >
                   <div className="p-3 flex items-stretch space-x-3">
-                    <Link href={`/meal/${meal.id}`} className="flex-shrink-0">
+                    <Link href={`/meal/${meal.id}`} className="flex-shrink-0" onClick={(e) => { if(selectedMealForDeletion) e.preventDefault();}}>
                         {meal.photoDataUri && (
                         <div className="w-20 h-20 relative rounded-lg overflow-hidden">
                             <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} layout="fill" className="object-cover" />
@@ -263,7 +323,7 @@ export default function DashboardScreen() {
                         )}
                     </Link>
                     <div className="flex-grow flex flex-col justify-between py-0.5">
-                        <Link href={`/meal/${meal.id}`} className="block">
+                        <Link href={`/meal/${meal.id}`} className="block" onClick={(e) => { if(selectedMealForDeletion) e.preventDefault();}}>
                         <div>
                             <div className="flex justify-between items-start mb-0.5">
                             <p className="font-semibold text-sm leading-tight text-foreground truncate pr-2" style={{maxWidth: 'calc(100% - 40px)'}}>{meal.name || "Unnamed Meal"}</p>
@@ -287,15 +347,6 @@ export default function DashboardScreen() {
                         </div>
                         </Link>
                     </div>
-                    <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="self-start text-muted-foreground hover:text-destructive h-8 w-8"
-                        onClick={(e) => { e.stopPropagation(); openDeleteDialog(meal.id); }}
-                        aria-label="Delete meal"
-                    >
-                        <Trash2 size={18} />
-                    </Button>
                   </div>
                 </Card>
               ))}
@@ -312,7 +363,31 @@ export default function DashboardScreen() {
         </Link>
       </div>
 
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      {selectedMealForDeletion && (
+        <div id="delete-trash-area-dashboard" className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-sm border-t border-border flex justify-center items-center z-30">
+          <Button 
+            variant="destructive" 
+            size="lg" 
+            className="w-auto px-8 py-4 rounded-xl"
+            onClick={() => {
+              if (selectedMealForDeletion) {
+                openDeleteDialog(selectedMealForDeletion);
+              }
+            }}
+          >
+            <Trash2 className="mr-3 h-6 w-6" /> Delete Selected Meal
+          </Button>
+        </div>
+      )}
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+          setIsDeleteDialogOpen(open);
+          if (!open) {
+            setMealToDeleteId(null); // Clear selection if dialog is cancelled
+            setSelectedMealForDeletion(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -321,7 +396,10 @@ export default function DashboardScreen() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setMealToDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => {
+              setMealToDeleteId(null);
+              setSelectedMealForDeletion(null);
+            }}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteMeal} className="bg-destructive hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
