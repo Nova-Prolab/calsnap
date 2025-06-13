@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -42,7 +43,7 @@ export default function HomePage() {
         <p className="text-slate-300 text-lg mb-4">Just snap a quick photo of your meal and AI will do the rest</p>
         <p className="text-slate-400 mb-8">Get your personal plan in less than 1 min</p>
         
-        <Link href="/onboarding/gender" legacyBehavior passHref>
+        <Link href="/onboarding/gender">
           <Button 
             variant="default"
             size="lg"

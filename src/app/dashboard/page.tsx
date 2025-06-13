@@ -89,7 +89,7 @@ export default function DashboardScreen() {
     <AppWrapper className="bg-background text-foreground">
       <header className="bg-card px-6 py-4 flex justify-between items-center border-b sticky top-0 z-10">
         <h1 className="text-2xl font-bold font-headline text-primary">CalSnap</h1>
-        <Link href="/profile" legacyBehavior passHref>
+        <Link href="/profile">
           <Button variant="ghost" size="icon" aria-label="Profile">
             <User className="w-6 h-6 text-primary" />
           </Button>
@@ -114,7 +114,7 @@ export default function DashboardScreen() {
             <CardContent className="p-0 text-center">
               <h3 className="text-xl font-bold mb-2">Set Up Your Profile!</h3>
               <p className="text-muted-foreground mb-4">Complete the onboarding to get personalized calorie goals.</p>
-              <Link href="/onboarding/gender" passHref legacyBehavior>
+              <Link href="/onboarding/gender">
                 <Button>Start Onboarding</Button>
               </Link>
             </CardContent>
@@ -175,41 +175,39 @@ export default function DashboardScreen() {
           ) : (
             <div className="space-y-4">
               {recentMeals.map(meal => (
-                <Link href={`/meal/${meal.id}`} key={meal.id} passHref legacyBehavior>
-                  <a className="block">
-                    <Card className="rounded-2xl shadow-md hover:shadow-lg transition-shadow cursor-pointer bg-card">
-                      <CardContent className="p-3 flex items-stretch space-x-3">
-                        {meal.photoDataUri && (
-                          <div className="w-20 h-20 relative rounded-lg overflow-hidden flex-shrink-0">
-                            <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} layout="fill" className="object-cover" />
+                <Link href={`/meal/${meal.id}`} key={meal.id} className="block">
+                  <Card className="rounded-2xl shadow-md hover:shadow-lg transition-shadow cursor-pointer bg-card">
+                    <CardContent className="p-3 flex items-stretch space-x-3">
+                      {meal.photoDataUri && (
+                        <div className="w-20 h-20 relative rounded-lg overflow-hidden flex-shrink-0">
+                          <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} layout="fill" className="object-cover" />
+                        </div>
+                      )}
+                      <div className="flex-grow flex flex-col justify-between py-0.5">
+                        <div>
+                          <div className="flex justify-between items-start mb-0.5">
+                            <p className="font-semibold text-sm leading-tight text-foreground truncate pr-2" style={{maxWidth: 'calc(100% - 40px)'}}>{meal.name || "Unnamed Meal"}</p>
+                            <p className="text-xs text-muted-foreground flex-shrink-0">{format(new Date(meal.timestamp), 'HH:mm')}</p>
                           </div>
-                        )}
-                        <div className="flex-grow flex flex-col justify-between py-0.5">
-                          <div>
-                            <div className="flex justify-between items-start mb-0.5">
-                              <p className="font-semibold text-sm leading-tight text-foreground truncate pr-2" style={{maxWidth: 'calc(100% - 40px)'}}>{meal.name || "Unnamed Meal"}</p>
-                              <p className="text-xs text-muted-foreground flex-shrink-0">{format(new Date(meal.timestamp), 'HH:mm')}</p>
-                            </div>
-                            <p className="text-lg font-bold text-primary">{meal.calories} Calories</p>
+                          <p className="text-lg font-bold text-primary">{meal.calories} Calories</p>
+                        </div>
+                        <div className="flex items-center space-x-3 mt-1">
+                          <div className="flex items-center">
+                            <MacroIcon letter="P" bgColorClass="bg-chart-1" />
+                            <span className="text-xs text-muted-foreground">{meal.protein}g</span>
                           </div>
-                          <div className="flex items-center space-x-3 mt-1">
-                            <div className="flex items-center">
-                              <MacroIcon letter="P" bgColorClass="bg-chart-1" />
-                              <span className="text-xs text-muted-foreground">{meal.protein}g</span>
-                            </div>
-                            <div className="flex items-center">
-                              <MacroIcon letter="F" bgColorClass="bg-chart-4" />
-                              <span className="text-xs text-muted-foreground">{meal.fat}g</span>
-                            </div>
-                            <div className="flex items-center">
-                              <MacroIcon letter="C" bgColorClass="bg-chart-3" />
-                              <span className="text-xs text-muted-foreground">{meal.carbohydrates}g</span>
-                            </div>
+                          <div className="flex items-center">
+                            <MacroIcon letter="F" bgColorClass="bg-chart-4" />
+                            <span className="text-xs text-muted-foreground">{meal.fat}g</span>
+                          </div>
+                          <div className="flex items-center">
+                            <MacroIcon letter="C" bgColorClass="bg-chart-3" />
+                            <span className="text-xs text-muted-foreground">{meal.carbohydrates}g</span>
                           </div>
                         </div>
-                      </CardContent>
-                    </Card>
-                  </a>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </Link>
               ))}
             </div>
@@ -218,7 +216,7 @@ export default function DashboardScreen() {
       </main>
       
       <div className="fixed bottom-6 right-6 flex space-x-3 z-20">
-        <Link href="/add-meal" legacyBehavior passHref>
+        <Link href="/add-meal">
           <Button variant="default" size="icon" className="bg-primary p-4 rounded-full shadow-lg h-14 w-14" aria-label="Add new meal">
             <Plus className="w-7 h-7 text-primary-foreground" />
           </Button>
@@ -227,4 +225,3 @@ export default function DashboardScreen() {
     </AppWrapper>
   );
 }
-
