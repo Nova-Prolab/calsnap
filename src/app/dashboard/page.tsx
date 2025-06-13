@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Camera, Plus, AlertTriangle, Trash2 } from 'lucide-react';
+import { User, Camera, Plus, AlertTriangle, Trash2, LibraryBig, PenSquare, Heart } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 
 const DayButton = ({ day, date, isActive, onClick }: { day: string; date: number; isActive: boolean; onClick: () => void }) => (
@@ -58,6 +63,7 @@ export default function DashboardScreen() {
   
   const [selectedMealForDeletion, setSelectedMealForDeletion] = useState<string | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isAddMealSheetOpen, setIsAddMealSheetOpen] = useState(false);
 
   const { toast } = useToast();
 
@@ -209,7 +215,7 @@ export default function DashboardScreen() {
         </Link>
       </header>
       
-      <main className="p-6 flex-grow overflow-y-auto pb-24 relative"> {/* Added relative for trash can positioning */}
+      <main className="p-6 flex-grow overflow-y-auto pb-24 relative">
         <div className="flex justify-between items-center mb-6">
           {weekDates.map((dateItem) => (
              <DayButton 
@@ -322,7 +328,7 @@ export default function DashboardScreen() {
                         </div>
                         )}
                     </Link>
-                    <div className="flex-grow flex flex-col justify-between py-0.5 min-w-0"> {/* Added min-w-0 here */}
+                    <div className="flex-grow flex flex-col justify-between py-0.5 min-w-0">
                         <Link href={`/meal/${meal.id}`} className="block" onClick={(e) => { if(selectedMealForDeletion) e.preventDefault();}}>
                         <div>
                             <div className="flex justify-between items-start mb-0.5">
@@ -355,12 +361,39 @@ export default function DashboardScreen() {
         </div>
       </main>
       
-      <div className="fixed bottom-6 right-6 flex space-x-3 z-20">
-        <Link href="/add-meal">
-          <Button variant="default" size="icon" className="bg-primary p-4 rounded-full shadow-lg h-14 w-14" aria-label="Add new meal">
-            <Plus className="w-7 h-7 text-primary-foreground" />
-          </Button>
-        </Link>
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20">
+        <Sheet open={isAddMealSheetOpen} onOpenChange={setIsAddMealSheetOpen}>
+          <SheetTrigger asChild>
+            <Button variant="default" size="icon" className="bg-primary p-4 rounded-full shadow-lg h-14 w-14" aria-label="Add new meal">
+              <Plus className="w-7 h-7 text-primary-foreground" />
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="rounded-t-2xl h-auto p-0 bg-card">
+            <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
+            <div className="p-5 space-y-1">
+              <Link href="/add-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary">
+                  <Camera className="mr-4 h-6 w-6 text-muted-foreground" /> Camera
+                </Button>
+              </Link>
+              <Link href="/add-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary">
+                  <LibraryBig className="mr-4 h-6 w-6 text-muted-foreground" /> Album
+                </Button>
+              </Link>
+              <Link href="/add-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
+                <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary">
+                  <PenSquare className="mr-4 h-6 w-6 text-muted-foreground" /> Describe food
+                </Button>
+              </Link>
+              <Link href="/add-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
+                 <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary">
+                  <Heart className="mr-4 h-6 w-6 text-muted-foreground" /> Favorites
+                </Button>
+              </Link>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
       {selectedMealForDeletion && (
@@ -409,4 +442,3 @@ export default function DashboardScreen() {
     </AppWrapper>
   );
 }
-
