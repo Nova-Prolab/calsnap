@@ -78,7 +78,7 @@ export default function FavoritesPage() {
     setToLocalStorage('calSnapMeals', [...existingMeals, mealToLog]);
     toast({
       title: "Meal Logged!",
-      description: `${meal.name || 'Favorite meal'} ( ${meal.calories} kcal) added to today's log.`,
+      description: `${meal.name || 'Favorite meal'} (${meal.calories} kcal) added to today's log.`,
       icon: <Utensils className="h-5 w-5 text-primary" />,
     });
   };
@@ -148,8 +148,8 @@ export default function FavoritesPage() {
                           <p className="text-lg font-bold text-primary">{meal.calories} Calories</p>
                        </Link>
                     </div>
-                    <div className="flex items-center justify-between mt-1">
-                        <div className="flex items-center space-x-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-2 gap-2">
+                        <div className="flex items-center space-x-2"> {/* Macro container */}
                             <div className="flex items-center">
                                 <MacroIcon letter="P" bgColorClass="bg-chart-1" />
                                 <span className="text-xs text-muted-foreground">{meal.protein}g</span>
@@ -163,8 +163,13 @@ export default function FavoritesPage() {
                                 <span className="text-xs text-muted-foreground">{meal.carbohydrates}g</span>
                             </div>
                         </div>
-                         <Button size="sm" variant="outline" onClick={() => logFavoriteMealForToday(meal)}>
-                            Log for Today
+                        <Button 
+                            size="sm" 
+                            variant="default" 
+                            className="w-full sm:w-auto" // Responsive width
+                            onClick={() => logFavoriteMealForToday(meal)}
+                        >
+                            <Utensils className="mr-2 h-4 w-4" /> Log for Today
                         </Button>
                     </div>
                   </div>
@@ -193,3 +198,4 @@ export default function FavoritesPage() {
     </AppWrapper>
   );
 }
+
