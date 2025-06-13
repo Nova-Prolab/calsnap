@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -28,7 +29,7 @@ export default function TestimonialsScreen() {
   return (
     <AppWrapper className="bg-card text-card-foreground">
       <div className="p-6 flex flex-col flex-grow">
-        <OnboardingHeader backHref="/onboarding/gender" progressValue={50} />
+        <OnboardingHeader backHref="/onboarding/goal" progressValue={95} />
         
         <h1 className="text-3xl font-bold mb-6 text-center font-headline">Show your love</h1>
         
@@ -69,7 +70,7 @@ export default function TestimonialsScreen() {
           size="lg"
           className="w-full mt-auto bg-primary text-primary-foreground hover:bg-primary/90 py-4 rounded-2xl font-semibold text-lg"
         >
-          Continue
+          Finish Setup
         </Button>
       </div>
     </AppWrapper>

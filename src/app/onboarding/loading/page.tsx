@@ -1,31 +1,52 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AppWrapper } from '@/components/AppWrapper';
 import { CircularProgress } from '@/components/CircularProgress';
+import { getFromLocalStorage, setToLocalStorage } from '@/lib/localStorage';
+import { calculateCalorieGoals } from '@/lib/calorieCalculator';
+import type { OnboardingData, CalorieGoals, Gender, ActivityLevel, Goal } from '@/types';
 
 export default function LoadingScreen() {
   const [progress, setProgress] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
+    // Retrieve all onboarding data
+    const gender = getFromLocalStorage<Gender | undefined>('onboardingGender', undefined);
+    const age = getFromLocalStorage<number | undefined>('onboardingAge', undefined);
+    const height = getFromLocalStorage<number | undefined>('onboardingHeight', undefined);
+    const weight = getFromLocalStorage<number | undefined>('onboardingWeight', undefined);
+    const activityLevel = getFromLocalStorage<ActivityLevel | undefined>('onboardingActivityLevel', undefined);
+    const goal = getFromLocalStorage<Goal | undefined>('onboardingGoal', undefined);
+
+    const onboardingData: OnboardingData = {
+      gender, age, height, weight, activityLevel, goal
+    };
+
+    // Calculate and store goals
+    const calculatedGoals = calculateCalorieGoals(onboardingData);
+    setToLocalStorage<CalorieGoals>('userCalorieGoals', calculatedGoals);
+
+    // Simulate loading process
     const timer = setInterval(() => {
       setProgress(prev => {
         if (prev >= 100) {
           clearInterval(timer);
           return 100;
         }
-        return prev + 2; // Faster progress for demo
+        return prev + 2; 
       });
-    }, 50); // Faster interval
+    }, 50);
     
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
     if (progress >= 100) {
-      router.replace('/dashboard'); // Use replace to prevent going back to loading
+      router.replace('/dashboard'); 
     }
   }, [progress, router]);
 

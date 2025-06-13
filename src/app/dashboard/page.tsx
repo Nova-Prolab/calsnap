@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -12,18 +13,11 @@ import type { Meal, DailyTotals, CalorieGoals } from '@/types';
 import { getFromLocalStorage } from '@/lib/localStorage';
 import { format } from 'date-fns';
 
-// Mock goals
-const MOCK_GOALS: CalorieGoals = {
-  calories: 2740,
-  protein: 171,
-  fat: 91,
-  carbohydrates: 308,
-};
-
-const DayButton = ({ day, date, isActive }: { day: string; date: number; isActive: boolean }) => (
+const DayButton = ({ day, date, isActive, onClick }: { day: string; date: number; isActive: boolean; onClick: () => void }) => (
   <div className="text-center">
     <div className="text-sm text-muted-foreground mb-1">{day}</div>
     <Button
+      onClick={onClick}
       variant={isActive ? 'default': 'ghost'}
       size="icon"
       className={`w-8 h-8 rounded-full text-sm ${isActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
@@ -36,17 +30,28 @@ const DayButton = ({ day, date, isActive }: { day: string; date: number; isActiv
 export default function DashboardScreen() {
   const [recentMeals, setRecentMeals] = useState<Meal[]>([]);
   const [dailyTotals, setDailyTotals] = useState<DailyTotals>({ calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
+  const [userGoals, setUserGoals] = useState<CalorieGoals>({ calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [isLoadingGoals, setIsLoadingGoals] = useState(true);
 
   useEffect(() => {
+    const storedGoals = getFromLocalStorage<CalorieGoals | null>('userCalorieGoals', null);
+    if (storedGoals && storedGoals.calories > 0) { // Ensure goals are valid before setting
+      setUserGoals(storedGoals);
+    } else {
+      // If no valid goals, keep them at 0 or handle redirection to onboarding
+      // For now, keeping them at 0 will make "Cals Left" display 0.
+      setUserGoals({ calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
+    }
+    setIsLoadingGoals(false);
+
     const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
-    // For simplicity, filter meals for the current day. A real app would handle dates better.
-    const todayMeals = storedMeals.filter(meal => 
+    const selectedDateMeals = storedMeals.filter(meal => 
       format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')
     );
-    setRecentMeals(todayMeals.slice(0, 3)); // Show latest 3
+    setRecentMeals(selectedDateMeals.slice(-3).reverse()); // Show latest 3, newest first
 
-    const totals = todayMeals.reduce((acc, meal) => {
+    const totals = selectedDateMeals.reduce((acc, meal) => {
       acc.calories += meal.calories;
       acc.protein += meal.protein;
       acc.fat += meal.fat;
@@ -56,20 +61,28 @@ export default function DashboardScreen() {
     setDailyTotals(totals);
   }, [currentDate]);
 
-  const caloriesLeft = Math.max(0, MOCK_GOALS.calories - dailyTotals.calories);
-  const calorieProgress = MOCK_GOALS.calories > 0 ? (dailyTotals.calories / MOCK_GOALS.calories) * 100 : 0;
+  const caloriesLeft = Math.max(0, userGoals.calories - dailyTotals.calories);
+  const calorieProgress = userGoals.calories > 0 ? (dailyTotals.calories / userGoals.calories) * 100 : 0;
 
-  const days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-  const todayDayIndex = currentDate.getDay(); // Sunday - 0, Monday - 1 ..
+  const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   
-  // Create a week view centered around today
   const weekDates = Array(7).fill(null).map((_, i) => {
     const date = new Date(currentDate);
-    date.setDate(currentDate.getDate() - (todayDayIndex - i + 7) % 7 + 3 ); // Adjust to center week view based on current day
+    // Adjust to start week on Sunday and center on current day if possible, or show current week.
+    const dayIndex = currentDate.getDay(); // 0 for Sunday, 6 for Saturday
+    date.setDate(currentDate.getDate() - dayIndex + i); 
     return date;
   });
 
 
+  if (isLoadingGoals) {
+    return (
+      <AppWrapper className="bg-card text-card-foreground flex items-center justify-center">
+        <p>Loading your data...</p>
+      </AppWrapper>
+    );
+  }
+  
   return (
     <AppWrapper className="bg-card text-card-foreground">
       <header className="bg-card px-6 py-4 flex justify-between items-center border-b sticky top-0 z-10">
@@ -81,18 +94,30 @@ export default function DashboardScreen() {
         </Link>
       </header>
       
-      <main className="p-6 flex-grow overflow-y-auto pb-24"> {/* Padding bottom for FABs */}
+      <main className="p-6 flex-grow overflow-y-auto pb-24">
         <div className="flex justify-between items-center mb-6">
-          {weekDates.map((dateItem, index) => (
+          {weekDates.map((dateItem) => (
              <DayButton 
-              key={index} 
-              day={days[dateItem.getDay()]} 
+              key={dateItem.toISOString()} 
+              day={daysOfWeek[dateItem.getDay()]} 
               date={dateItem.getDate()} 
-              isActive={dateItem.toDateString() === currentDate.toDateString()} 
+              isActive={dateItem.toDateString() === currentDate.toDateString()}
+              onClick={() => setCurrentDate(dateItem)}
             />
           ))}
         </div>
         
+        {userGoals.calories === 0 ? (
+           <Card className="rounded-3xl p-6 mb-6 shadow-lg bg-secondary">
+            <CardContent className="p-0 text-center">
+              <h3 className="text-xl font-bold mb-2">Set Up Your Profile!</h3>
+              <p className="text-muted-foreground mb-4">Complete the onboarding to get personalized calorie goals.</p>
+              <Link href="/onboarding/gender" passHref legacyBehavior>
+                <Button>Start Onboarding</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        ) : (
         <Card className="rounded-3xl p-6 mb-6 shadow-lg">
           <CardContent className="p-0">
             <div className="flex items-center justify-between">
@@ -103,7 +128,7 @@ export default function DashboardScreen() {
                     cx="50" cy="50" r="45" strokeWidth="8" fill="transparent"
                     className="stroke-primary"
                     strokeDasharray={2 * Math.PI * 45}
-                    strokeDashoffset={(2 * Math.PI * 45) * (1 - Math.min(dailyTotals.calories, MOCK_GOALS.calories) / MOCK_GOALS.calories )}
+                    strokeDashoffset={(2 * Math.PI * 45) * (1 - (userGoals.calories > 0 ? Math.min(dailyTotals.calories, userGoals.calories) / userGoals.calories : 0) )}
                     strokeLinecap="round"
                   />
                 </svg>
@@ -115,9 +140,9 @@ export default function DashboardScreen() {
               
               <div className="space-y-3">
                 {[
-                  { name: 'Protein', current: dailyTotals.protein, goal: MOCK_GOALS.protein, color: 'bg-orange-400' },
-                  { name: 'Fat', current: dailyTotals.fat, goal: MOCK_GOALS.fat, color: 'bg-yellow-400' },
-                  { name: 'Carbs', current: dailyTotals.carbohydrates, goal: MOCK_GOALS.carbohydrates, color: 'bg-blue-400' },
+                  { name: 'Protein', current: dailyTotals.protein, goal: userGoals.protein, color: 'bg-orange-400' },
+                  { name: 'Fat', current: dailyTotals.fat, goal: userGoals.fat, color: 'bg-yellow-400' },
+                  { name: 'Carbs', current: dailyTotals.carbohydrates, goal: userGoals.carbohydrates, color: 'bg-blue-400' },
                 ].map(macro => (
                   <div key={macro.name}>
                     <div className="text-sm font-semibold mb-0.5">{macro.name}</div>
@@ -129,6 +154,7 @@ export default function DashboardScreen() {
             </div>
           </CardContent>
         </Card>
+        )}
         
         <div className="mb-6">
           <h3 className="text-xl font-bold mb-4 font-headline">Recently Added</h3>
@@ -137,7 +163,7 @@ export default function DashboardScreen() {
               <CardContent className="p-0 flex flex-col items-center">
                 <Camera className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
                 <h4 className="text-lg font-bold mb-2">No meals yet!</h4>
-                <p className="text-muted-foreground text-sm">Tap the '+' to add your first meal.</p>
+                <p className="text-muted-foreground text-sm">Tap the '+' to add your first meal for {format(currentDate, "MMMM do")}.</p>
               </CardContent>
             </Card>
           ) : (

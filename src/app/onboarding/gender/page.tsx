@@ -1,29 +1,30 @@
+
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { OnboardingHeader } from '@/components/OnboardingHeader';
 import { cn } from '@/lib/utils';
+import { setToLocalStorage } from '@/lib/localStorage';
+import type { Gender } from '@/types';
 
 export default function GenderScreen() {
-  const [selectedGender, setSelectedGender] = useState('');
+  const [selectedGender, setSelectedGender] = useState<Gender | ''>('');
   const router = useRouter();
 
   const handleContinue = () => {
     if (selectedGender) {
-      // Optionally store gender, e.g., in localStorage
-      // localStorage.setItem('selectedGender', selectedGender);
-      router.push('/onboarding/testimonials');
+      setToLocalStorage<Gender>('onboardingGender', selectedGender);
+      router.push('/onboarding/age');
     }
   };
 
   return (
     <AppWrapper className="bg-card text-card-foreground">
       <div className="p-6 flex flex-col flex-grow">
-        <OnboardingHeader backHref="/" progressValue={25} />
+        <OnboardingHeader backHref="/" progressValue={14} />
       
         <h1 className="text-3xl font-bold mb-4 font-headline">Choose your gender</h1>
         <p className="text-muted-foreground mb-12">This helps us create a more personalized plan for you.</p>
