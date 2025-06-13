@@ -36,11 +36,9 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     const storedGoals = getFromLocalStorage<CalorieGoals | null>('userCalorieGoals', null);
-    if (storedGoals && storedGoals.calories > 0) { // Ensure goals are valid before setting
+    if (storedGoals && storedGoals.calories > 0) { 
       setUserGoals(storedGoals);
     } else {
-      // If no valid goals, keep them at 0 or handle redirection to onboarding
-      // For now, keeping them at 0 will make "Cals Left" display 0.
       setUserGoals({ calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
     }
     setIsLoadingGoals(false);
@@ -49,7 +47,7 @@ export default function DashboardScreen() {
     const selectedDateMeals = storedMeals.filter(meal => 
       format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')
     );
-    setRecentMeals(selectedDateMeals.slice(-3).reverse()); // Show latest 3, newest first
+    setRecentMeals(selectedDateMeals.slice(-3).reverse()); 
 
     const totals = selectedDateMeals.reduce((acc, meal) => {
       acc.calories += meal.calories;
@@ -62,14 +60,12 @@ export default function DashboardScreen() {
   }, [currentDate]);
 
   const caloriesLeft = Math.max(0, userGoals.calories - dailyTotals.calories);
-  const calorieProgress = userGoals.calories > 0 ? (dailyTotals.calories / userGoals.calories) * 100 : 0;
-
+  
   const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   
   const weekDates = Array(7).fill(null).map((_, i) => {
     const date = new Date(currentDate);
-    // Adjust to start week on Sunday and center on current day if possible, or show current week.
-    const dayIndex = currentDate.getDay(); // 0 for Sunday, 6 for Saturday
+    const dayIndex = currentDate.getDay(); 
     date.setDate(currentDate.getDate() - dayIndex + i); 
     return date;
   });
@@ -140,14 +136,18 @@ export default function DashboardScreen() {
               
               <div className="space-y-3">
                 {[
-                  { name: 'Protein', current: dailyTotals.protein, goal: userGoals.protein, color: 'bg-orange-400' },
-                  { name: 'Fat', current: dailyTotals.fat, goal: userGoals.fat, color: 'bg-yellow-400' },
-                  { name: 'Carbs', current: dailyTotals.carbohydrates, goal: userGoals.carbohydrates, color: 'bg-blue-400' },
+                  { name: 'Protein', current: dailyTotals.protein, goal: userGoals.protein, colorClass: 'bg-chart-1' }, // Orange
+                  { name: 'Fat', current: dailyTotals.fat, goal: userGoals.fat, colorClass: 'bg-chart-4' },       // Yellow
+                  { name: 'Carbs', current: dailyTotals.carbohydrates, goal: userGoals.carbohydrates, colorClass: 'bg-chart-3' }, // Blue
                 ].map(macro => (
                   <div key={macro.name}>
                     <div className="text-sm font-semibold mb-0.5">{macro.name}</div>
                     <div className="text-xs text-muted-foreground">{Math.round(macro.current)}/{macro.goal}g</div>
-                    <Progress value={macro.goal > 0 ? (macro.current / macro.goal) * 100 : 0} className={`w-24 h-1.5 rounded-full ${macro.color}`} indicatorClassName="bg-transparent" />
+                    <Progress 
+                      value={macro.goal > 0 ? Math.min((macro.current / macro.goal) * 100, 100) : 0} 
+                      className="w-24 h-1.5 rounded-full" 
+                      indicatorClassName={macro.colorClass} 
+                    />
                   </div>
                 ))}
               </div>
