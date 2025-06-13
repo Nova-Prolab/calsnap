@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Camera, Crown, Plus, Settings } from 'lucide-react';
+import { User, Camera, Plus, Settings } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -192,9 +192,6 @@ export default function DashboardScreen() {
       </main>
       
       <div className="fixed bottom-6 right-6 flex space-x-3 z-20">
-        <Button variant="default" size="icon" className="bg-gradient-to-r from-orange-500 to-yellow-400 p-4 rounded-full shadow-lg h-14 w-14" aria-label="Premium features">
-          <Crown className="w-6 h-6 text-white" />
-        </Button>
         <Link href="/add-meal" legacyBehavior passHref>
           <Button variant="default" size="icon" className="bg-primary p-4 rounded-full shadow-lg h-14 w-14" aria-label="Add new meal">
             <Plus className="w-7 h-7 text-primary-foreground" />
