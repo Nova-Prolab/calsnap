@@ -310,8 +310,8 @@ export default function DashboardScreen() {
                   onTouchStart={() => handleInteractionStart(meal.id)}
                   onTouchEnd={handleInteractionEnd}
                   onContextMenu={(e) => {
-                    e.preventDefault(); // Prevents context menu on long press for touch
-                    handleInteractionStart(meal.id); // Ensure selection on contextmenu-like long press
+                    e.preventDefault(); 
+                    handleInteractionStart(meal.id); 
                   }}
                 >
                   <div className="p-3 flex items-stretch space-x-3">
@@ -322,12 +322,12 @@ export default function DashboardScreen() {
                         </div>
                         )}
                     </Link>
-                    <div className="flex-grow flex flex-col justify-between py-0.5">
+                    <div className="flex-grow flex flex-col justify-between py-0.5 min-w-0"> {/* Added min-w-0 here */}
                         <Link href={`/meal/${meal.id}`} className="block" onClick={(e) => { if(selectedMealForDeletion) e.preventDefault();}}>
                         <div>
                             <div className="flex justify-between items-start mb-0.5">
-                            <p className="font-semibold text-sm leading-tight text-foreground truncate pr-2" style={{maxWidth: 'calc(100% - 40px)'}}>{meal.name || "Unnamed Meal"}</p>
-                            <p className="text-xs text-muted-foreground flex-shrink-0">{format(new Date(meal.timestamp), 'HH:mm')}</p>
+                                <p className="font-semibold text-sm leading-tight text-foreground truncate flex-1 min-w-0 mr-2">{meal.name || "Unnamed Meal"}</p>
+                                <p className="text-xs text-muted-foreground flex-shrink-0">{format(new Date(meal.timestamp), 'HH:mm')}</p>
                             </div>
                             <p className="text-lg font-bold text-primary">{meal.calories} Calories</p>
                         </div>
@@ -383,7 +383,7 @@ export default function DashboardScreen() {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
           setIsDeleteDialogOpen(open);
           if (!open) {
-            setMealToDeleteId(null); // Clear selection if dialog is cancelled
+            setMealToDeleteId(null); 
             setSelectedMealForDeletion(null);
           }
         }}
