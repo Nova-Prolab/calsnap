@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Camera, Loader2, Send, Edit3, Save, Utensils, X } from 'lucide-react';
+import { Camera, Loader2, Send, Edit3, Save, Utensils, X, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +24,7 @@ interface EditableMealData {
   fat: string;
   carbohydrates: string;
   ingredients?: MealIngredient[];
+  healthScore?: string;
 }
 
 export function CalorieEstimationForm() {
@@ -49,6 +50,7 @@ export function CalorieEstimationForm() {
         fat: estimationResult.macronutrientBreakdown.fat.toFixed(1),
         carbohydrates: estimationResult.macronutrientBreakdown.carbohydrates.toFixed(1),
         ingredients: estimationResult.ingredients || [],
+        healthScore: estimationResult.healthScore?.toString() || '',
       });
     } else {
       setEditableData(null);
@@ -164,7 +166,7 @@ export function CalorieEstimationForm() {
     }
   };
 
-  const handleInputChange = (field: keyof Omit<EditableMealData, 'ingredients'>, value: string) => {
+  const handleInputChange = (field: keyof Omit<EditableMealData, 'ingredients' | 'healthScore'>, value: string) => {
     if (editableData) {
       setEditableData(prev => prev ? { ...prev, [field]: value } : null);
     }
@@ -178,7 +180,7 @@ export function CalorieEstimationForm() {
   };
 
   const handleLogMeal = () => {
-    if (!editableData || !photoPreview) { 
+    if (!editableData || !photoPreview || !estimationResult) { 
       toast({ title: "No Estimation Data", description: "Please estimate calories first and ensure a photo is present.", variant: "destructive" });
       return;
     }
@@ -187,10 +189,13 @@ export function CalorieEstimationForm() {
     const protein = parseFloat(editableData.protein);
     const fat = parseFloat(editableData.fat);
     const carbohydrates = parseFloat(editableData.carbohydrates);
+    const healthScore = editableData.healthScore ? parseFloat(editableData.healthScore) : undefined;
+
 
     if (isNaN(calories) || isNaN(protein) || isNaN(fat) || isNaN(carbohydrates) ||
-        calories < 0 || protein < 0 || fat < 0 || carbohydrates < 0) {
-      toast({ title: "Invalid Nutritional Data", description: "Please ensure all nutritional values are valid numbers.", variant: "destructive" });
+        calories < 0 || protein < 0 || fat < 0 || carbohydrates < 0 || 
+        (healthScore !== undefined && (isNaN(healthScore) || healthScore < 0 || healthScore > 10))) {
+      toast({ title: "Invalid Nutritional Data", description: "Please ensure all nutritional values (including health score if present) are valid numbers.", variant: "destructive" });
       return;
     }
     
@@ -205,6 +210,8 @@ export function CalorieEstimationForm() {
       carbohydrates,
       timestamp: Date.now(),
       ingredients: editableData.ingredients || [],
+      healthScore: estimationResult.healthScore, // Use original from AI
+      isFavorite: false, // Default new meals are not favorite
     };
 
     const existingMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
@@ -346,6 +353,20 @@ export function CalorieEstimationForm() {
                 />
               </div>
             </div>
+            {editableData.healthScore && (
+                 <div className="space-y-2">
+                    <Label htmlFor="health-score" className="font-semibold text-md flex items-center">
+                        <Heart className="mr-2 h-4 w-4 text-pink-500" /> Health Score
+                    </Label>
+                    <Input 
+                    id="health-score" 
+                    type="text" // Display only, not directly editable from here
+                    value={`${editableData.healthScore} / 10`} 
+                    readOnly 
+                    className="bg-card text-muted-foreground"
+                    />
+                </div>
+            )}
             {editableData.ingredients && editableData.ingredients.length > 0 && (
               <div>
                 <Label className="font-semibold text-md mb-2 block flex items-center"><Utensils className="mr-2 h-4 w-4 text-primary" /> Identified Ingredients</Label>
@@ -393,4 +414,3 @@ export function CalorieEstimationForm() {
     </Card>
   );
 }
-

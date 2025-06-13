@@ -17,6 +17,8 @@ export interface Meal {
   carbohydrates: number;
   timestamp: number;
   ingredients?: MealIngredient[];
+  healthScore?: number; // Scale of 0-10
+  isFavorite?: boolean;
 }
 
 export interface DailyTotals {
@@ -45,4 +47,3 @@ export interface OnboardingData {
   activityLevel?: ActivityLevel;
   goal?: Goal;
 }
-

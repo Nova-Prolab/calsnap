@@ -4,8 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import Link from 'next/link';
-import { ChevronLeft, Edit3, Save, CheckCircle, Utensils, AlertTriangle, Sparkles, X, Trash2 } from 'lucide-react';
+import { ChevronLeft, Edit3, Save, CheckCircle, Utensils, AlertTriangle, Sparkles, X, Trash2, Heart, MoreVertical, RotateCcw } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,8 +23,15 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { cn } from '@/lib/utils';
 
 interface EditableMealData {
   calories: string;
@@ -33,7 +39,9 @@ interface EditableMealData {
   fat: string;
   carbohydrates: string;
   name: string;
-  ingredients?: MealIngredient[];
+  ingredients: MealIngredient[];
+  healthScore: string;
+  isFavorite: boolean;
 }
 
 export default function MealDetailPage() {
@@ -45,7 +53,8 @@ export default function MealDetailPage() {
 
   const [meal, setMeal] = useState<Meal | null>(null);
   const [editableData, setEditableData] = useState<EditableMealData | null>(null);
-  const [editingField, setEditingField] = useState<keyof Omit<EditableMealData, 'ingredients'> | null>(null);
+  const [initialEditableData, setInitialEditableData] = useState<EditableMealData | null>(null);
+  const [editingField, setEditingField] = useState<keyof Omit<EditableMealData, 'ingredients' | 'healthScore' | 'isFavorite'> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [isClientReady, setIsClientReady] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -60,33 +69,45 @@ export default function MealDetailPage() {
       const currentMeal = storedMeals.find(m => m.id === mealId);
       if (currentMeal) {
         setMeal(currentMeal);
-        setEditableData({
+        const currentEditableData = {
           name: currentMeal.name || '',
           calories: currentMeal.calories.toString(),
           protein: currentMeal.protein.toString(),
           fat: currentMeal.fat.toString(),
           carbohydrates: currentMeal.carbohydrates.toString(),
           ingredients: currentMeal.ingredients || [],
-        });
+          healthScore: currentMeal.healthScore?.toString() ?? 'N/A',
+          isFavorite: currentMeal.isFavorite || false,
+        };
+        setEditableData(currentEditableData);
+        setInitialEditableData(currentEditableData); // Store initial state for revert
       } else {
         setMeal(null); 
         setEditableData(null);
+        setInitialEditableData(null);
       }
     }
-  }, [mealId, isClientReady, toast]); 
+  }, [mealId, isClientReady]); 
 
-  const handleEdit = (field: keyof Omit<EditableMealData, 'ingredients'>) => {
+  const handleEdit = (field: keyof Omit<EditableMealData, 'ingredients' | 'healthScore' | 'isFavorite'>) => {
     setEditingField(field);
   };
 
-  const handleInputChange = (field: keyof Omit<EditableMealData, 'ingredients'>, value: string) => {
+  const handleInputChange = (field: keyof Omit<EditableMealData, 'ingredients' | 'healthScore' | 'isFavorite'>, value: string) => {
     if (editableData) {
       setEditableData({ ...editableData, [field]: value });
       setHasChanges(true);
     }
   };
+  
+  const handleToggleFavorite = () => {
+    if (editableData) {
+      setEditableData(prev => prev ? { ...prev, isFavorite: !prev.isFavorite } : null);
+      setHasChanges(true);
+    }
+  };
 
-  const handleSaveField = (field: keyof Omit<EditableMealData, 'ingredients'>) => {
+  const handleSaveField = (field: keyof Omit<EditableMealData, 'ingredients' | 'healthScore' | 'isFavorite'>) => {
     if (!meal || !editableData) return;
 
     const updatedMealData = { ...editableData }; 
@@ -95,10 +116,11 @@ export default function MealDetailPage() {
     let numericValue: number | undefined = undefined;
 
     if (field !== 'name') {
-      numericValue = parseFloat(updatedMealData[field as keyof Omit<EditableMealData, 'name' | 'ingredients'>]);
+      numericValue = parseFloat(updatedMealData[field as keyof Omit<EditableMealData, 'name' | 'ingredients' | 'healthScore' | 'isFavorite'>]);
       if (isNaN(numericValue) || numericValue < 0) {
         toast({ variant: "destructive", title: "Invalid Value", description: `Please enter a valid non-negative number for ${field}.`});
-        setEditableData(prev => prev ? {...prev, [field]: meal[field as keyof Meal]?.toString() ?? ''} : null);
+        const originalValue = meal[field as keyof Meal] ?? (initialEditableData?.[field as keyof EditableMealData] ?? '');
+        setEditableData(prev => prev ? {...prev, [field]: originalValue.toString()} : null);
         valid = false;
       }
     }
@@ -111,7 +133,7 @@ export default function MealDetailPage() {
   };
 
   const handleDeleteIngredient = (indexToDelete: number) => {
-    if (editableData && editableData.ingredients) {
+    if (editableData) {
       const updatedIngredients = editableData.ingredients.filter((_, index) => index !== indexToDelete);
       setEditableData(prev => prev ? { ...prev, ingredients: updatedIngredients } : null);
       setHasChanges(true);
@@ -125,11 +147,14 @@ export default function MealDetailPage() {
     const numProtein = parseFloat(editableData.protein);
     const numFat = parseFloat(editableData.fat);
     const numCarbs = parseFloat(editableData.carbohydrates);
+    const numHealthScore = editableData.healthScore !== 'N/A' ? parseFloat(editableData.healthScore) : undefined;
+
 
     if (isNaN(numCalories) || numCalories < 0 ||
         isNaN(numProtein) || numProtein < 0 ||
         isNaN(numFat) || numFat < 0 ||
-        isNaN(numCarbs) || numCarbs < 0) {
+        isNaN(numCarbs) || numCarbs < 0 ||
+        (numHealthScore !== undefined && (isNaN(numHealthScore) || numHealthScore < 0 || numHealthScore > 10))) {
       toast({ variant: "destructive", title: "Invalid Data", description: "One or more nutritional values are invalid."});
       return;
     }
@@ -141,7 +166,9 @@ export default function MealDetailPage() {
       protein: numProtein,
       fat: numFat,
       carbohydrates: numCarbs,
-      ingredients: editableData.ingredients || [], 
+      ingredients: editableData.ingredients,
+      healthScore: numHealthScore,
+      isFavorite: editableData.isFavorite,
     };
     
     setMeal(finalMeal);
@@ -149,6 +176,7 @@ export default function MealDetailPage() {
     const updatedMeals = storedMeals.map(m => m.id === mealId ? finalMeal : m);
     setToLocalStorage('calSnapMeals', updatedMeals);
     
+    setInitialEditableData(editableData); // Update initial state to current saved state
     setHasChanges(false);
     setEditingField(null); 
     toast({ title: "Changes Saved", description: "Meal details have been updated.", icon: <CheckCircle className="h-5 w-5 text-green-500" /> });
@@ -163,6 +191,14 @@ export default function MealDetailPage() {
     router.push('/dashboard');
   };
 
+  const handleRevertChanges = () => {
+    if (initialEditableData) {
+      setEditableData(initialEditableData);
+      setHasChanges(false);
+      setEditingField(null);
+      toast({ title: "Changes Reverted", description: "Your unsaved changes have been discarded." });
+    }
+  };
 
   if (!isClientReady) {
     return (
@@ -188,7 +224,7 @@ export default function MealDetailPage() {
     );
   }
 
-  if (!meal) { 
+  if (!meal || !editableData) { 
      return (
         <AppWrapper className="bg-background text-foreground flex items-center justify-center p-6">
             <Card className="w-full max-w-md text-center">
@@ -205,15 +241,7 @@ export default function MealDetailPage() {
     );
   }
   
-  if (!editableData) { 
-    return (
-      <AppWrapper className="bg-background text-foreground flex items-center justify-center">
-        <p>Preparing meal data...</p>
-      </AppWrapper>
-    );
-  }
-  
-  const nutrientFields: { key: keyof Omit<EditableMealData, 'name' | 'ingredients'>; label: string; unit: string, iconColor: string, iconInitial: string }[] = [
+  const nutrientFields: { key: keyof Omit<EditableMealData, 'name' | 'ingredients' | 'healthScore' | 'isFavorite'>; label: string; unit: string, iconColor: string, iconInitial: string }[] = [
     { key: 'calories', label: 'Calories', unit: 'kcal', iconColor: 'bg-primary', iconInitial: 'C' },
     { key: 'protein', label: 'Protein', unit: 'g', iconColor: 'bg-chart-1', iconInitial: 'P' },
     { key: 'fat', label: 'Fat', unit: 'g', iconColor: 'bg-chart-4', iconInitial: 'F' },
@@ -222,7 +250,7 @@ export default function MealDetailPage() {
 
   return (
     <AppWrapper className="bg-background">
-      <header className="p-4 flex items-center border-b sticky top-0 bg-background z-10">
+      <header className="p-4 flex items-center justify-between border-b sticky top-0 bg-background z-10">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="mr-2">
           <ChevronLeft size={28} />
           <span className="sr-only">Back</span>
@@ -243,11 +271,34 @@ export default function MealDetailPage() {
             </span>
           )}
         </h1>
-        {editingField !== 'name' && (
-            <Button variant="ghost" size="icon" onClick={() => handleEdit('name')} className="ml-2">
-                <Edit3 size={20} />
+        <div className="flex items-center ml-2">
+            {editingField !== 'name' && (
+                <Button variant="ghost" size="icon" onClick={() => handleEdit('name')} className="h-9 w-9">
+                    <Edit3 size={18} />
+                </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={handleToggleFavorite} className="h-9 w-9">
+                <Heart size={20} className={cn(editableData.isFavorite ? "fill-red-500 text-red-500" : "text-foreground")} />
             </Button>
-        )}
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9">
+                        <MoreVertical size={20} />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setIsDeleteDialogOpen(true)} className="text-destructive focus:text-destructive focus:bg-destructive/10">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete Meal
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={handleRevertChanges} disabled={!hasChanges}>
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Revert Changes
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        </div>
       </header>
 
       <main className="flex-grow overflow-y-auto pb-20">
@@ -258,17 +309,16 @@ export default function MealDetailPage() {
         )}
         
         <div className="p-4 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
           {nutrientFields.map(({ key, label, unit, iconColor, iconInitial }) => (
             <Card key={key} className="shadow-md rounded-xl">
-              <CardContent className="p-4">
+              <CardContent className="p-3">
+                 <Label className="text-xs text-muted-foreground mb-1 block">{label}</Label>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
-                    <div className={`w-8 h-8 rounded-full ${iconColor} flex items-center justify-center text-primary-foreground font-semibold text-sm mr-3`}>
+                     <div className={`w-7 h-7 rounded-full ${iconColor} flex items-center justify-center text-primary-foreground font-semibold text-xs mr-2`}>
                       {iconInitial}
                     </div>
-                    <span className="text-md font-medium text-muted-foreground">{label}</span>
-                  </div>
-                  <div className="flex items-center">
                     {editingField === key ? (
                       <Input
                         type="number"
@@ -276,25 +326,40 @@ export default function MealDetailPage() {
                         onChange={(e) => handleInputChange(key, e.target.value)}
                         onBlur={() => handleSaveField(key)}
                         autoFocus
-                        className="w-24 text-right text-lg font-semibold h-auto p-1"
+                        className="w-20 text-left text-md font-semibold h-auto p-1"
                         min="0"
                       />
                     ) : (
-                      <span onClick={() => handleEdit(key)} className="text-lg font-semibold cursor-pointer hover:opacity-75">
+                      <span onClick={() => handleEdit(key)} className="text-md font-semibold cursor-pointer hover:opacity-75">
                         {editableData[key]}
                       </span>
                     )}
-                    <span className="text-sm text-muted-foreground ml-1 mr-2">{unit}</span>
-                    {editingField !== key && (
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(key)} className="h-8 w-8">
-                            <Edit3 size={16} />
+                    <span className="text-xs text-muted-foreground ml-1">{unit}</span>
+                  </div>
+                  {editingField !== key && (
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(key)} className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                            <Edit3 size={14} />
                         </Button>
                     )}
-                  </div>
                 </div>
               </CardContent>
             </Card>
           ))}
+            <Card className="shadow-md rounded-xl">
+                <CardContent className="p-3">
+                    <Label className="text-xs text-muted-foreground mb-1 block">Health Score</Label>
+                    <div className="flex items-center">
+                        <div className={`w-7 h-7 rounded-full bg-pink-500 flex items-center justify-center text-primary-foreground font-semibold text-xs mr-2`}>
+                            <Heart size={14} className="fill-white" />
+                        </div>
+                        <span className="text-md font-semibold">
+                            {editableData.healthScore !== 'N/A' ? `${editableData.healthScore} / 10` : 'N/A'}
+                        </span>
+                    </div>
+                </CardContent>
+            </Card>
+          </div>
+
 
           {editableData.ingredients && editableData.ingredients.length > 0 && (
             <Card className="shadow-md rounded-xl">
@@ -333,13 +398,10 @@ export default function MealDetailPage() {
           <Button variant="outline" className="w-full">
             <Sparkles className="mr-2 h-4 w-4" /> Fix Result (Re-estimate with AI)
           </Button>
-
-          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" className="w-full mt-2">
-                <Trash2 className="mr-2 h-4 w-4" /> Delete Meal
-              </Button>
-            </AlertDialogTrigger>
+        </div>
+      </main>
+      
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -355,11 +417,8 @@ export default function MealDetailPage() {
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
-          </AlertDialog>
+      </AlertDialog>
 
-        </div>
-      </main>
-      
       {hasChanges && (
         <footer className="p-4 border-t bg-background sticky bottom-0 z-10">
           <Button onClick={handleGlobalSave} size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
@@ -370,4 +429,3 @@ export default function MealDetailPage() {
     </AppWrapper>
   );
 }
-
