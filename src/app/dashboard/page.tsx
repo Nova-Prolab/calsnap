@@ -27,6 +27,12 @@ const DayButton = ({ day, date, isActive, onClick }: { day: string; date: number
   </div>
 );
 
+const MacroIcon = ({ letter, bgColorClass }: { letter: string; bgColorClass: string }) => (
+  <div className={`w-5 h-5 rounded-full ${bgColorClass} flex items-center justify-center text-xs font-semibold text-primary-foreground mr-1.5`}>
+    {letter}
+  </div>
+);
+
 export default function DashboardScreen() {
   const [recentMeals, setRecentMeals] = useState<Meal[]>([]);
   const [dailyTotals, setDailyTotals] = useState<DailyTotals>({ calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
@@ -47,7 +53,7 @@ export default function DashboardScreen() {
     const selectedDateMeals = storedMeals.filter(meal => 
       format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')
     );
-    setRecentMeals(selectedDateMeals.slice(-3).reverse()); 
+    setRecentMeals(selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5)); // Show latest 5
 
     const totals = selectedDateMeals.reduce((acc, meal) => {
       acc.calories += meal.calories;
@@ -80,7 +86,7 @@ export default function DashboardScreen() {
   }
   
   return (
-    <AppWrapper className="bg-card text-card-foreground">
+    <AppWrapper className="bg-background text-foreground">
       <header className="bg-card px-6 py-4 flex justify-between items-center border-b sticky top-0 z-10">
         <h1 className="text-2xl font-bold font-headline text-primary">CalSnap</h1>
         <Link href="/profile" legacyBehavior passHref>
@@ -114,7 +120,7 @@ export default function DashboardScreen() {
             </CardContent>
           </Card>
         ) : (
-        <Card className="rounded-3xl p-6 mb-6 shadow-lg">
+        <Card className="rounded-3xl p-6 mb-6 shadow-lg bg-card">
           <CardContent className="p-0">
             <div className="flex items-center justify-between">
               <div className="relative">
@@ -171,16 +177,35 @@ export default function DashboardScreen() {
               {recentMeals.map(meal => (
                 <Link href={`/meal/${meal.id}`} key={meal.id} passHref legacyBehavior>
                   <a className="block">
-                    <Card className="rounded-2xl shadow-md hover:shadow-lg transition-shadow cursor-pointer">
-                      <CardContent className="p-4 flex items-center space-x-4">
+                    <Card className="rounded-2xl shadow-md hover:shadow-lg transition-shadow cursor-pointer bg-card">
+                      <CardContent className="p-3 flex items-stretch space-x-3">
                         {meal.photoDataUri && (
-                          <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} width={64} height={64} className="rounded-lg object-cover" />
+                          <div className="w-20 h-20 relative rounded-lg overflow-hidden flex-shrink-0">
+                            <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} layout="fill" className="object-cover" />
+                          </div>
                         )}
-                        <div className="flex-grow">
-                          <p className="font-semibold">{meal.name || `${meal.calories} kcal meal`}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {meal.calories} kcal &bull; P:{meal.protein}g F:{meal.fat}g C:{meal.carbohydrates}g
-                          </p>
+                        <div className="flex-grow flex flex-col justify-between py-0.5">
+                          <div>
+                            <div className="flex justify-between items-start mb-0.5">
+                              <p className="font-semibold text-sm leading-tight text-foreground truncate pr-2" style={{maxWidth: 'calc(100% - 40px)'}}>{meal.name || "Unnamed Meal"}</p>
+                              <p className="text-xs text-muted-foreground flex-shrink-0">{format(new Date(meal.timestamp), 'HH:mm')}</p>
+                            </div>
+                            <p className="text-lg font-bold text-primary">{meal.calories} Calories</p>
+                          </div>
+                          <div className="flex items-center space-x-3 mt-1">
+                            <div className="flex items-center">
+                              <MacroIcon letter="P" bgColorClass="bg-chart-1" />
+                              <span className="text-xs text-muted-foreground">{meal.protein}g</span>
+                            </div>
+                            <div className="flex items-center">
+                              <MacroIcon letter="F" bgColorClass="bg-chart-4" />
+                              <span className="text-xs text-muted-foreground">{meal.fat}g</span>
+                            </div>
+                            <div className="flex items-center">
+                              <MacroIcon letter="C" bgColorClass="bg-chart-3" />
+                              <span className="text-xs text-muted-foreground">{meal.carbohydrates}g</span>
+                            </div>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -202,3 +227,4 @@ export default function DashboardScreen() {
     </AppWrapper>
   );
 }
+
