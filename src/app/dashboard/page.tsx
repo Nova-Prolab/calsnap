@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Camera, Plus, AlertTriangle, Trash2, LibraryBig, PenSquare, Heart, Loader2, X as CancelIcon } from 'lucide-react';
+import { User, Camera, Plus, AlertTriangle, Trash2, LibraryBig, PenSquare, Heart, Loader2, X as CancelIcon, Video, Check } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Sheet,
   SheetContent,
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/sheet";
 import { estimateMealCalories, type EstimateMealCaloriesOutput } from '@/ai/flows/estimate-meal-calories';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 
 const DayButton = ({ day, date, isActive, onClick }: { day: string; date: number; isActive: boolean; onClick: () => void }) => (
@@ -59,16 +61,22 @@ export default function DashboardScreen() {
   const [userGoals, setUserGoals] = useState<CalorieGoals>({ calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isLoadingGoals, setIsLoadingGoals] = useState(true);
-  
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [mealToDeleteId, setMealToDeleteId] = useState<string | null>(null);
-  
+
   const [selectedMealForDeletion, setSelectedMealForDeletion] = useState<string | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isAddMealSheetOpen, setIsAddMealSheetOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
   const calculateAndSetDailyTotals = (mealsForDate: Meal[]) => {
     const totals = mealsForDate.reduce((acc, meal) => {
@@ -85,7 +93,7 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     const storedGoals = getFromLocalStorage<CalorieGoals | null>('userCalorieGoals', null);
-    if (storedGoals && storedGoals.calories > 0) { 
+    if (storedGoals && storedGoals.calories > 0) {
       setUserGoals(storedGoals);
     } else {
       setUserGoals({ calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
@@ -93,14 +101,69 @@ export default function DashboardScreen() {
     setIsLoadingGoals(false);
 
     const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
-    const selectedDateMeals = storedMeals.filter(meal => 
+    const selectedDateMeals = storedMeals.filter(meal =>
       format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd') && !meal.isAnalyzingPlaceholder
     );
-    // Keep any existing analyzing placeholders if they belong to the current session (not stored)
     const analyzingPlaceholders = recentMeals.filter(meal => meal.isAnalyzingPlaceholder);
-    setRecentMeals([...analyzingPlaceholders, ...selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5-analyzingPlaceholders.length)]); 
+    setRecentMeals([...analyzingPlaceholders, ...selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5-analyzingPlaceholders.length)]);
     calculateAndSetDailyTotals(selectedDateMeals);
-  }, [currentDate]); // recentMeals removed from dependency array to avoid loop with placeholders
+  }, [currentDate]);
+
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [cameraStream]);
+
+  const requestCameraPermission = async () => {
+    if (cameraStream) {
+       cameraStream.getTracks().forEach(track => track.stop());
+       setCameraStream(null);
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setCameraStream(stream);
+      setHasCameraPermission(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      setHasCameraPermission(false);
+      toast({
+        variant: 'destructive',
+        title: 'Camera Access Denied',
+        description: 'Please enable camera permissions in your browser settings.',
+      });
+      setIsCameraModalOpen(false);
+    }
+  };
+
+  const openCameraModal = () => {
+    setIsAddMealSheetOpen(false);
+    setIsCameraModalOpen(true);
+    requestCameraPermission();
+  };
+
+  const handleCapturePhoto = () => {
+    if (videoRef.current && canvasRef.current && cameraStream) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const photoDataUri = canvas.toDataURL('image/jpeg');
+        processPhotoForAnalysis(photoDataUri);
+      }
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+      setIsCameraModalOpen(false);
+    }
+  };
 
   const openDeleteDialog = (id: string) => {
     setMealToDeleteId(id);
@@ -109,7 +172,7 @@ export default function DashboardScreen() {
 
   const confirmDeleteMeal = () => {
     if (!mealToDeleteId) return;
-    
+
     const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
     const updatedMeals = storedMeals.filter(m => m.id !== mealToDeleteId);
     setToLocalStorage('calSnapMeals', updatedMeals);
@@ -117,10 +180,10 @@ export default function DashboardScreen() {
     const currentRecentMeals = recentMeals.filter(m => m.id !== mealToDeleteId);
     setRecentMeals(currentRecentMeals);
     calculateAndSetDailyTotals(currentRecentMeals.filter(m => !m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')));
-    
+
     toast({ title: "Meal Deleted", description: "The meal has been removed.", icon: <Trash2 className="h-5 w-5 text-destructive" /> });
     setMealToDeleteId(null);
-    setSelectedMealForDeletion(null); 
+    setSelectedMealForDeletion(null);
     setIsDeleteDialogOpen(false);
   };
 
@@ -130,7 +193,7 @@ export default function DashboardScreen() {
     }
     longPressTimerRef.current = setTimeout(() => {
       setSelectedMealForDeletion(mealId);
-    }, 700); 
+    }, 700);
   };
 
   const handleInteractionEnd = () => {
@@ -139,71 +202,75 @@ export default function DashboardScreen() {
     }
   };
 
-  const handleImageSelectedForAnalysis = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const processPhotoForAnalysis = async (photoDataUri: string) => {
+    const analysisId = `analysis-${crypto.randomUUID()}`;
+
+    const placeholderMeal: Meal = {
+      id: analysisId,
+      name: 'Analyzing...',
+      photoDataUri,
+      calories: 0, protein: 0, fat: 0, carbohydrates: 0,
+      timestamp: Date.now(),
+      isAnalyzingPlaceholder: true,
+    };
+
+    setRecentMeals(prevMeals => [placeholderMeal, ...prevMeals.filter(m => !m.isAnalyzingPlaceholder)]);
+
+    try {
+      const estimationResult = await estimateMealCalories({ photoDataUri });
+      const newMeal: Meal = {
+        id: crypto.randomUUID(),
+        name: estimationResult.suggestedName || `Meal at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+        photoDataUri,
+        calories: parseFloat(estimationResult.calorieEstimate.toFixed(0)),
+        protein: parseFloat(estimationResult.macronutrientBreakdown.protein.toFixed(1)),
+        fat: parseFloat(estimationResult.macronutrientBreakdown.fat.toFixed(1)),
+        carbohydrates: parseFloat(estimationResult.macronutrientBreakdown.carbohydrates.toFixed(1)),
+        timestamp: placeholderMeal.timestamp,
+        ingredients: estimationResult.ingredients || [],
+        healthScore: estimationResult.healthScore,
+        isFavorite: false,
+        calorieExplanation: estimationResult.calorieExplanation,
+        proteinExplanation: estimationResult.proteinExplanation,
+        fatExplanation: estimationResult.fatExplanation,
+        carbohydratesExplanation: estimationResult.carbohydratesExplanation,
+        healthScoreExplanation: estimationResult.healthScoreExplanation,
+      };
+
+      const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
+      setToLocalStorage('calSnapMeals', [...storedMeals, newMeal]);
+
+      setRecentMeals(prevMeals => {
+        const updated = prevMeals.map(m => m.id === analysisId ? newMeal : m);
+        const currentDayMeals = updated.filter(m => !m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd'));
+        calculateAndSetDailyTotals(currentDayMeals);
+        return currentDayMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5);
+      });
+
+    } catch (error) {
+      console.error("Error estimating calories from dashboard:", error);
+      toast({ title: "Estimation Failed", description: "Could not estimate calories. Please try again.", variant: "destructive" });
+      setRecentMeals(prevMeals => prevMeals.filter(m => m.id !== analysisId));
+    } finally {
+       if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const handleFileSelectedForAnalysis = async (event: React.ChangeEvent<HTMLInputElement>) => {
     setIsAddMealSheetOpen(false);
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = async () => {
         const photoDataUri = reader.result as string;
-        const analysisId = `analysis-${crypto.randomUUID()}`;
-        
-        const placeholderMeal: Meal = {
-          id: analysisId,
-          name: 'Analyzing...',
-          photoDataUri,
-          calories: 0, protein: 0, fat: 0, carbohydrates: 0,
-          timestamp: Date.now(),
-          isAnalyzingPlaceholder: true,
-        };
-
-        setRecentMeals(prevMeals => [placeholderMeal, ...prevMeals.filter(m => !m.isAnalyzingPlaceholder)]);
-        
-        try {
-          const estimationResult = await estimateMealCalories({ photoDataUri });
-          const newMeal: Meal = {
-            id: crypto.randomUUID(),
-            name: estimationResult.suggestedName || `Meal at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
-            photoDataUri,
-            calories: parseFloat(estimationResult.calorieEstimate.toFixed(0)),
-            protein: parseFloat(estimationResult.macronutrientBreakdown.protein.toFixed(1)),
-            fat: parseFloat(estimationResult.macronutrientBreakdown.fat.toFixed(1)),
-            carbohydrates: parseFloat(estimationResult.macronutrientBreakdown.carbohydrates.toFixed(1)),
-            timestamp: placeholderMeal.timestamp, // Use placeholder's timestamp
-            ingredients: estimationResult.ingredients || [],
-            healthScore: estimationResult.healthScore,
-            isFavorite: false,
-            calorieExplanation: estimationResult.calorieExplanation,
-            proteinExplanation: estimationResult.proteinExplanation,
-            fatExplanation: estimationResult.fatExplanation,
-            carbohydratesExplanation: estimationResult.carbohydratesExplanation,
-            healthScoreExplanation: estimationResult.healthScoreExplanation,
-          };
-
-          const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
-          setToLocalStorage('calSnapMeals', [...storedMeals, newMeal]);
-
-          setRecentMeals(prevMeals => {
-            const updated = prevMeals.map(m => m.id === analysisId ? newMeal : m);
-            const currentDayMeals = updated.filter(m => !m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd'));
-            calculateAndSetDailyTotals(currentDayMeals);
-            return currentDayMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5);
-          });
-
-
-        } catch (error) {
-          console.error("Error estimating calories from dashboard:", error);
-          toast({ title: "Estimation Failed", description: "Could not estimate calories. Please try again.", variant: "destructive" });
-          setRecentMeals(prevMeals => prevMeals.filter(m => m.id !== analysisId));
-        } finally {
-           if (fileInputRef.current) {
-            fileInputRef.current.value = ""; // Reset file input
-          }
-        }
+        processPhotoForAnalysis(photoDataUri);
       };
       reader.readAsDataURL(file);
     }
   };
+
 
   const cancelAnalysis = (analysisId: string) => {
     setRecentMeals(prevMeals => prevMeals.filter(meal => meal.id !== analysisId));
@@ -223,7 +290,7 @@ export default function DashboardScreen() {
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside as unknown as EventListener); 
+    document.addEventListener('touchstart', handleClickOutside as unknown as EventListener);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside as unknown as EventListener);
@@ -260,13 +327,13 @@ export default function DashboardScreen() {
       textColor: 'text-primary',
     };
   }
-  
+
   const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-  
+
   const weekDates = Array(7).fill(null).map((_, i) => {
     const date = new Date(currentDate);
-    const dayIndex = currentDate.getDay(); 
-    date.setDate(currentDate.getDate() - dayIndex + i); 
+    const dayIndex = currentDate.getDay();
+    date.setDate(currentDate.getDate() - dayIndex + i);
     return date;
   });
 
@@ -274,11 +341,11 @@ export default function DashboardScreen() {
   if (isLoadingGoals) {
     return (
       <AppWrapper className="bg-background text-foreground flex items-center justify-center">
-        <p>Loading your data...</p>
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </AppWrapper>
     );
   }
-  
+
   return (
     <AppWrapper className="bg-background text-foreground">
       <header className="bg-card px-6 py-4 flex justify-between items-center border-b sticky top-0 z-10">
@@ -289,21 +356,23 @@ export default function DashboardScreen() {
           </Button>
         </Link>
       </header>
-      
+
       <main className="p-6 flex-grow overflow-y-auto pb-24 relative">
-      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageSelectedForAnalysis} className="hidden" />
+      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileSelectedForAnalysis} className="hidden" />
+      <canvas ref={canvasRef} className="hidden"></canvas>
+
         <div className="flex justify-between items-center mb-6">
           {weekDates.map((dateItem) => (
-             <DayButton 
-              key={dateItem.toISOString()} 
-              day={daysOfWeek[dateItem.getDay()]} 
-              date={dateItem.getDate()} 
+             <DayButton
+              key={dateItem.toISOString()}
+              day={daysOfWeek[dateItem.getDay()]}
+              date={dateItem.getDate()}
               isActive={dateItem.toDateString() === currentDate.toDateString()}
               onClick={() => {setSelectedMealForDeletion(null); setCurrentDate(dateItem);}}
             />
           ))}
         </div>
-        
+
         {userGoals.calories === 0 ? (
            <Card className="rounded-3xl p-6 mb-6 shadow-lg bg-secondary">
             <CardContent className="p-0 text-center">
@@ -323,7 +392,7 @@ export default function DashboardScreen() {
                   <circle cx="50" cy="50" r="45" strokeWidth="8" fill="transparent" className="stroke-secondary" />
                   <circle
                     cx="50" cy="50" r="45" strokeWidth="8" fill="transparent"
-                    className={cn("stroke-primary", calorieStatus.isOver && "stroke-destructive")}
+                    className={cn("stroke-primary", calorieStatus.isOver && userGoals.calories > 0 && "stroke-destructive")}
                     strokeDasharray={2 * Math.PI * 45}
                     strokeDashoffset={(2 * Math.PI * 45) * (1 - (userGoals.calories > 0 ? Math.min(dailyTotals.calories, userGoals.calories) / userGoals.calories : 0) )}
                     strokeLinecap="round"
@@ -337,12 +406,12 @@ export default function DashboardScreen() {
                   <span className="text-xs text-muted-foreground">{calorieStatus.label}</span>
                 </div>
               </div>
-              
+
               <div className="space-y-3">
                 {[
-                  { name: 'Protein', current: dailyTotals.protein, goal: userGoals.protein, colorClass: 'bg-chart-1' }, 
-                  { name: 'Fat', current: dailyTotals.fat, goal: userGoals.fat, colorClass: 'bg-chart-4' },       
-                  { name: 'Carbs', current: dailyTotals.carbohydrates, goal: userGoals.carbohydrates, colorClass: 'bg-chart-3' }, 
+                  { name: 'Protein', current: dailyTotals.protein, goal: userGoals.protein, colorClass: 'bg-chart-1' },
+                  { name: 'Fat', current: dailyTotals.fat, goal: userGoals.fat, colorClass: 'bg-chart-4' },
+                  { name: 'Carbs', current: dailyTotals.carbohydrates, goal: userGoals.carbohydrates, colorClass: 'bg-chart-3' },
                 ].map(macro => {
                   const isOverGoal = macro.current > macro.goal && macro.goal > 0;
                   return (
@@ -353,9 +422,9 @@ export default function DashboardScreen() {
                         <span>/{macro.goal}g</span>
                         {isOverGoal && <AlertTriangle className="w-3 h-3 text-destructive ml-1" />}
                       </div>
-                      <Progress 
-                        value={macro.goal > 0 ? Math.min((macro.current / macro.goal) * 100, 100) : 0} 
-                        className="w-24 h-1.5 rounded-full bg-secondary" 
+                      <Progress
+                        value={macro.goal > 0 ? Math.min((macro.current / macro.goal) * 100, 100) : 0}
+                        className="w-24 h-1.5 rounded-full bg-secondary"
                         indicatorClassName={cn(macro.colorClass, isOverGoal && "bg-destructive")}
                       />
                     </div>
@@ -366,7 +435,7 @@ export default function DashboardScreen() {
           </CardContent>
         </Card>
         )}
-        
+
         <div className="mb-6">
           <h3 className="text-xl font-bold mb-4 font-headline">Recently Added</h3>
           {(recentMeals.length === 0 || recentMeals.every(m => m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') !== format(currentDate, 'yyyy-MM-dd'))) && !recentMeals.some(m => m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')) ? (
@@ -407,12 +476,11 @@ export default function DashboardScreen() {
                     </Card>
                   );
                 }
-                // Only render non-placeholder meals for the current date
                 if (format(new Date(meal.timestamp), 'yyyy-MM-dd') !== format(currentDate, 'yyyy-MM-dd')) return null;
 
                 return (
-                <Card 
-                  key={meal.id} 
+                <Card
+                  key={meal.id}
                   data-meal-card-id={meal.id}
                   className={cn(
                     "rounded-2xl shadow-md hover:shadow-lg transition-all bg-card cursor-pointer",
@@ -423,8 +491,8 @@ export default function DashboardScreen() {
                   onTouchStart={() => handleInteractionStart(meal.id)}
                   onTouchEnd={handleInteractionEnd}
                   onContextMenu={(e) => {
-                    e.preventDefault(); 
-                    handleInteractionStart(meal.id); 
+                    e.preventDefault();
+                    handleInteractionStart(meal.id);
                   }}
                 >
                   <div className="p-3 flex items-stretch space-x-3">
@@ -468,7 +536,7 @@ export default function DashboardScreen() {
           )}
         </div>
       </main>
-      
+
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-20">
         <Sheet open={isAddMealSheetOpen} onOpenChange={setIsAddMealSheetOpen}>
           <SheetTrigger asChild>
@@ -479,20 +547,18 @@ export default function DashboardScreen() {
           <SheetContent side="bottom" className="rounded-t-2xl h-auto p-0 bg-card">
             <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
             <div className="p-5 space-y-1">
-              <Link href="/add-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
-                <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary">
-                  <Camera className="mr-4 h-6 w-6 text-muted-foreground" /> Camera
-                </Button>
-              </Link>
-              <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary" onClick={() => fileInputRef.current?.click()}>
+              <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary" onClick={openCameraModal}>
+                <Camera className="mr-4 h-6 w-6 text-muted-foreground" /> Camera
+              </Button>
+              <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary" onClick={() => { setIsAddMealSheetOpen(false); fileInputRef.current?.click(); }}>
                 <LibraryBig className="mr-4 h-6 w-6 text-muted-foreground" /> Album
               </Button>
-              <Link href="/add-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
+              <Link href="/describe-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
                 <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary">
                   <PenSquare className="mr-4 h-6 w-6 text-muted-foreground" /> Describe food
                 </Button>
               </Link>
-              <Link href="/add-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
+              <Link href="/favorites" passHref onClick={() => setIsAddMealSheetOpen(false)}>
                  <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary">
                   <Heart className="mr-4 h-6 w-6 text-muted-foreground" /> Favorites
                 </Button>
@@ -504,9 +570,9 @@ export default function DashboardScreen() {
 
       {selectedMealForDeletion && (
         <div id="delete-trash-area-dashboard" className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-sm border-t border-border flex justify-center items-center z-30">
-          <Button 
-            variant="destructive" 
-            size="lg" 
+          <Button
+            variant="destructive"
+            size="lg"
             className="w-auto px-8 py-4 rounded-xl"
             onClick={() => {
               if (selectedMealForDeletion) {
@@ -522,7 +588,7 @@ export default function DashboardScreen() {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
           setIsDeleteDialogOpen(open);
           if (!open) {
-            setMealToDeleteId(null); 
+            setMealToDeleteId(null);
             setSelectedMealForDeletion(null);
           }
         }}
@@ -545,6 +611,50 @@ export default function DashboardScreen() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={isCameraModalOpen} onOpenChange={(open) => {
+        setIsCameraModalOpen(open);
+        if (!open && cameraStream) {
+          cameraStream.getTracks().forEach(track => track.stop());
+          setCameraStream(null);
+        }
+      }}>
+        <DialogContent className="p-0 border-0 max-w-md w-full bg-card">
+           <DialogHeader className="p-4 border-b">
+            <DialogTitle className="text-lg font-semibold">Take Photo</DialogTitle>
+          </DialogHeader>
+          <div className="p-4">
+            <video ref={videoRef} className="w-full aspect-video rounded-md bg-secondary mb-4" autoPlay muted playsInline />
+            {hasCameraPermission === false && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertTitle>Camera Access Denied</AlertTitle>
+                <AlertDescription>
+                  Please enable camera permissions in your browser settings. You may need to refresh the page.
+                </AlertDescription>
+              </Alert>
+            )}
+             {hasCameraPermission === null && (
+                <div className="flex justify-center items-center h-32">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-2 text-muted-foreground">Requesting camera...</p>
+                </div>
+            )}
+          </div>
+          {hasCameraPermission === true && (
+            <DialogFooter className="p-4 border-t">
+              <Button variant="outline" onClick={() => {
+                  setIsCameraModalOpen(false);
+                  if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
+                  setCameraStream(null);
+              }}>Cancel</Button>
+              <Button onClick={handleCapturePhoto} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                <Check className="mr-2 h-5 w-5" /> Capture
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
+
     </AppWrapper>
   );
 }

@@ -9,22 +9,23 @@ export interface MealIngredient {
 
 export interface Meal {
   id: string;
-  name?: string; 
-  photoDataUri?: string; 
+  name?: string;
+  photoDataUri?: string;
+  description?: string; // Added for described meals
   calories: number;
   protein: number;
   fat: number;
   carbohydrates: number;
   timestamp: number;
   ingredients?: MealIngredient[];
-  healthScore?: number; 
+  healthScore?: number;
   isFavorite?: boolean;
   calorieExplanation?: string;
   proteinExplanation?: string;
   fatExplanation?: string;
   carbohydratesExplanation?: string;
   healthScoreExplanation?: string;
-  isAnalyzingPlaceholder?: boolean; // Added for dashboard analysis card
+  isAnalyzingPlaceholder?: boolean;
 }
 
 export interface DailyTotals {
@@ -47,9 +48,9 @@ export type Goal = 'lose_weight' | 'maintain_weight' | 'gain_weight';
 
 export interface OnboardingData {
   gender?: Gender;
-  age?: number; 
-  height?: number; 
-  weight?: number; 
+  age?: number;
+  height?: number;
+  weight?: number;
   activityLevel?: ActivityLevel;
   goal?: Goal;
 }
