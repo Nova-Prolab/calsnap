@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Camera, Plus, AlertTriangle, Trash2, LibraryBig, PenSquare, Heart } from 'lucide-react';
+import { User, Camera, Plus, AlertTriangle, Trash2, LibraryBig, PenSquare, Heart, Loader2, X as CancelIcon } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,8 @@ import {
   SheetContent,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { estimateMealCalories, type EstimateMealCaloriesOutput } from '@/ai/flows/estimate-meal-calories';
+import { Skeleton } from '@/components/ui/skeleton';
 
 
 const DayButton = ({ day, date, isActive, onClick }: { day: string; date: number; isActive: boolean; onClick: () => void }) => (
@@ -64,15 +66,18 @@ export default function DashboardScreen() {
   const [selectedMealForDeletion, setSelectedMealForDeletion] = useState<string | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isAddMealSheetOpen, setIsAddMealSheetOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { toast } = useToast();
 
   const calculateAndSetDailyTotals = (mealsForDate: Meal[]) => {
     const totals = mealsForDate.reduce((acc, meal) => {
-      acc.calories += meal.calories;
-      acc.protein += meal.protein;
-      acc.fat += meal.fat;
-      acc.carbohydrates += meal.carbohydrates;
+      if (!meal.isAnalyzingPlaceholder) {
+        acc.calories += meal.calories;
+        acc.protein += meal.protein;
+        acc.fat += meal.fat;
+        acc.carbohydrates += meal.carbohydrates;
+      }
       return acc;
     }, { calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
     setDailyTotals(totals);
@@ -89,11 +94,13 @@ export default function DashboardScreen() {
 
     const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
     const selectedDateMeals = storedMeals.filter(meal => 
-      format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')
+      format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd') && !meal.isAnalyzingPlaceholder
     );
-    setRecentMeals(selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5)); 
+    // Keep any existing analyzing placeholders if they belong to the current session (not stored)
+    const analyzingPlaceholders = recentMeals.filter(meal => meal.isAnalyzingPlaceholder);
+    setRecentMeals([...analyzingPlaceholders, ...selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5-analyzingPlaceholders.length)]); 
     calculateAndSetDailyTotals(selectedDateMeals);
-  }, [currentDate]);
+  }, [currentDate]); // recentMeals removed from dependency array to avoid loop with placeholders
 
   const openDeleteDialog = (id: string) => {
     setMealToDeleteId(id);
@@ -107,11 +114,9 @@ export default function DashboardScreen() {
     const updatedMeals = storedMeals.filter(m => m.id !== mealToDeleteId);
     setToLocalStorage('calSnapMeals', updatedMeals);
 
-    const selectedDateMeals = updatedMeals.filter(meal => 
-      format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')
-    );
-    setRecentMeals(selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5));
-    calculateAndSetDailyTotals(selectedDateMeals);
+    const currentRecentMeals = recentMeals.filter(m => m.id !== mealToDeleteId);
+    setRecentMeals(currentRecentMeals);
+    calculateAndSetDailyTotals(currentRecentMeals.filter(m => !m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')));
     
     toast({ title: "Meal Deleted", description: "The meal has been removed.", icon: <Trash2 className="h-5 w-5 text-destructive" /> });
     setMealToDeleteId(null);
@@ -125,13 +130,83 @@ export default function DashboardScreen() {
     }
     longPressTimerRef.current = setTimeout(() => {
       setSelectedMealForDeletion(mealId);
-    }, 700); // 700ms for long press
+    }, 700); 
   };
 
   const handleInteractionEnd = () => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
     }
+  };
+
+  const handleImageSelectedForAnalysis = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    setIsAddMealSheetOpen(false);
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const photoDataUri = reader.result as string;
+        const analysisId = `analysis-${crypto.randomUUID()}`;
+        
+        const placeholderMeal: Meal = {
+          id: analysisId,
+          name: 'Analyzing...',
+          photoDataUri,
+          calories: 0, protein: 0, fat: 0, carbohydrates: 0,
+          timestamp: Date.now(),
+          isAnalyzingPlaceholder: true,
+        };
+
+        setRecentMeals(prevMeals => [placeholderMeal, ...prevMeals.filter(m => !m.isAnalyzingPlaceholder)]);
+        
+        try {
+          const estimationResult = await estimateMealCalories({ photoDataUri });
+          const newMeal: Meal = {
+            id: crypto.randomUUID(),
+            name: estimationResult.suggestedName || `Meal at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+            photoDataUri,
+            calories: parseFloat(estimationResult.calorieEstimate.toFixed(0)),
+            protein: parseFloat(estimationResult.macronutrientBreakdown.protein.toFixed(1)),
+            fat: parseFloat(estimationResult.macronutrientBreakdown.fat.toFixed(1)),
+            carbohydrates: parseFloat(estimationResult.macronutrientBreakdown.carbohydrates.toFixed(1)),
+            timestamp: placeholderMeal.timestamp, // Use placeholder's timestamp
+            ingredients: estimationResult.ingredients || [],
+            healthScore: estimationResult.healthScore,
+            isFavorite: false,
+            calorieExplanation: estimationResult.calorieExplanation,
+            proteinExplanation: estimationResult.proteinExplanation,
+            fatExplanation: estimationResult.fatExplanation,
+            carbohydratesExplanation: estimationResult.carbohydratesExplanation,
+            healthScoreExplanation: estimationResult.healthScoreExplanation,
+          };
+
+          const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
+          setToLocalStorage('calSnapMeals', [...storedMeals, newMeal]);
+
+          setRecentMeals(prevMeals => {
+            const updated = prevMeals.map(m => m.id === analysisId ? newMeal : m);
+            const currentDayMeals = updated.filter(m => !m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd'));
+            calculateAndSetDailyTotals(currentDayMeals);
+            return currentDayMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5);
+          });
+
+
+        } catch (error) {
+          console.error("Error estimating calories from dashboard:", error);
+          toast({ title: "Estimation Failed", description: "Could not estimate calories. Please try again.", variant: "destructive" });
+          setRecentMeals(prevMeals => prevMeals.filter(m => m.id !== analysisId));
+        } finally {
+           if (fileInputRef.current) {
+            fileInputRef.current.value = ""; // Reset file input
+          }
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const cancelAnalysis = (analysisId: string) => {
+    setRecentMeals(prevMeals => prevMeals.filter(meal => meal.id !== analysisId));
   };
 
   useEffect(() => {
@@ -148,7 +223,7 @@ export default function DashboardScreen() {
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside as unknown as EventListener); // For touch devices
+    document.addEventListener('touchstart', handleClickOutside as unknown as EventListener); 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('touchstart', handleClickOutside as unknown as EventListener);
@@ -216,6 +291,7 @@ export default function DashboardScreen() {
       </header>
       
       <main className="p-6 flex-grow overflow-y-auto pb-24 relative">
+      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageSelectedForAnalysis} className="hidden" />
         <div className="flex justify-between items-center mb-6">
           {weekDates.map((dateItem) => (
              <DayButton 
@@ -293,7 +369,7 @@ export default function DashboardScreen() {
         
         <div className="mb-6">
           <h3 className="text-xl font-bold mb-4 font-headline">Recently Added</h3>
-          {recentMeals.length === 0 ? (
+          {(recentMeals.length === 0 || recentMeals.every(m => m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') !== format(currentDate, 'yyyy-MM-dd'))) && !recentMeals.some(m => m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')) ? (
             <Card className="bg-secondary rounded-3xl p-8 text-center">
               <CardContent className="p-0 flex flex-col items-center">
                 <Camera className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
@@ -303,7 +379,38 @@ export default function DashboardScreen() {
             </Card>
           ) : (
             <div className="space-y-4">
-              {recentMeals.map(meal => (
+              {recentMeals.map(meal => {
+                if (meal.isAnalyzingPlaceholder) {
+                  if (format(new Date(meal.timestamp), 'yyyy-MM-dd') !== format(currentDate, 'yyyy-MM-dd')) return null;
+                  return (
+                    <Card key={meal.id} className="rounded-2xl shadow-md bg-card p-3">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-20 h-20 relative rounded-lg overflow-hidden bg-secondary flex items-center justify-center flex-shrink-0">
+                          {meal.photoDataUri && <Image src={meal.photoDataUri} alt="Analyzing meal" layout="fill" className="object-cover opacity-50" />}
+                          <Loader2 className="w-10 h-10 text-primary animate-spin absolute" />
+                        </div>
+                        <div className="flex-grow space-y-1.5">
+                          <div className="flex justify-between items-start">
+                            <p className="font-semibold text-sm text-foreground">{meal.name}</p>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => cancelAnalysis(meal.id)}>
+                              <CancelIcon size={18} />
+                            </Button>
+                          </div>
+                          <Skeleton className="h-4 w-3/4 bg-muted/70" />
+                          <div className="flex space-x-2">
+                            <Skeleton className="h-3 w-1/4 bg-muted/60" />
+                            <Skeleton className="h-3 w-1/4 bg-muted/60" />
+                            <Skeleton className="h-3 w-1/4 bg-muted/60" />
+                          </div>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                }
+                // Only render non-placeholder meals for the current date
+                if (format(new Date(meal.timestamp), 'yyyy-MM-dd') !== format(currentDate, 'yyyy-MM-dd')) return null;
+
+                return (
                 <Card 
                   key={meal.id} 
                   data-meal-card-id={meal.id}
@@ -355,7 +462,8 @@ export default function DashboardScreen() {
                     </div>
                   </div>
                 </Card>
-              ))}
+              );
+            })}
             </div>
           )}
         </div>
@@ -376,11 +484,9 @@ export default function DashboardScreen() {
                   <Camera className="mr-4 h-6 w-6 text-muted-foreground" /> Camera
                 </Button>
               </Link>
-              <Link href="/add-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
-                <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary">
-                  <LibraryBig className="mr-4 h-6 w-6 text-muted-foreground" /> Album
-                </Button>
-              </Link>
+              <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary" onClick={() => fileInputRef.current?.click()}>
+                <LibraryBig className="mr-4 h-6 w-6 text-muted-foreground" /> Album
+              </Button>
               <Link href="/add-meal" passHref onClick={() => setIsAddMealSheetOpen(false)}>
                 <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary">
                   <PenSquare className="mr-4 h-6 w-6 text-muted-foreground" /> Describe food
