@@ -1,10 +1,9 @@
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Camera, Plus, AlertTriangle, Trash2, LibraryBig, PenSquare, Heart, Loader2, X as CancelIcon, Video, Check } from 'lucide-react';
+import { User, Camera, Plus, AlertTriangle, Trash2, LibraryBig, PenSquare, Heart, Loader2, X as CancelIcon, Check } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +21,7 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle as AlertDialogTitleComponent, // Renamed to avoid conflict
+  AlertDialogTitle as AlertDialogTitleComponent,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -34,7 +33,7 @@ import {
 } from "@/components/ui/sheet";
 import { estimateMealCalories, type EstimateMealCaloriesOutput } from '@/ai/flows/estimate-meal-calories';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogContent, DialogHeader as DialogHeaderComponent, DialogTitle as DialogTitleComponent, DialogFooter } from '@/components/ui/dialog'; // Renamed to avoid conflict
+import { Dialog, DialogContent, DialogHeader as DialogHeaderComponent, DialogTitle as DialogTitleComponent, DialogFooter } from '@/components/ui/dialog';
 
 
 const DayButton = ({ day, date, isActive, onClick }: { day: string; date: number; isActive: boolean; onClick: () => void }) => (
@@ -65,10 +64,11 @@ export default function DashboardScreen() {
   const [isLoadingGoals, setIsLoadingGoals] = useState(true);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [mealToDeleteId, setMealToDeleteId] = useState<string | null>(null);
-
-  const [selectedMealForDeletion, setSelectedMealForDeletion] = useState<string | null>(null);
+  
+  const [selectedMealsForDeletion, setSelectedMealsForDeletion] = useState<string[]>([]);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isLongPressRef = useRef<boolean>(false);
+
   const [isAddMealSheetOpen, setIsAddMealSheetOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -107,14 +107,26 @@ export default function DashboardScreen() {
       format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd') && !meal.isAnalyzingPlaceholder
     );
     const analyzingPlaceholders = recentMeals.filter(meal => meal.isAnalyzingPlaceholder);
+    
     setRecentMeals([...analyzingPlaceholders, ...selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5-analyzingPlaceholders.length)]);
     calculateAndSetDailyTotals(selectedDateMeals);
-  }, [currentDate]);
+  }, [currentDate]); // Removed recentMeals from dependency array to avoid potential loops
+
+  useEffect(() => {
+    // Recalculate totals if recentMeals (excluding placeholders) change for the current date.
+    // This handles updates after meal deletion or analysis completion.
+    const currentDayMeals = recentMeals.filter(m => !m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd'));
+    calculateAndSetDailyTotals(currentDayMeals);
+  }, [recentMeals, currentDate]);
+
 
   useEffect(() => {
     return () => {
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
+      }
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
       }
     };
   }, [cameraStream]);
@@ -167,42 +179,61 @@ export default function DashboardScreen() {
     }
   };
 
-  const openDeleteDialog = (id: string) => {
-    setMealToDeleteId(id);
-    setIsDeleteDialogOpen(true);
+  const openDeleteDialog = () => {
+    if (selectedMealsForDeletion.length > 0) {
+      setIsDeleteDialogOpen(true);
+    }
   };
 
   const confirmDeleteMeal = () => {
-    if (!mealToDeleteId) return;
+    if (selectedMealsForDeletion.length === 0) return;
 
     const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
-    const updatedMeals = storedMeals.filter(m => m.id !== mealToDeleteId);
+    const updatedMeals = storedMeals.filter(m => !selectedMealsForDeletion.includes(m.id));
     setToLocalStorage('calSnapMeals', updatedMeals);
 
-    const currentRecentMeals = recentMeals.filter(m => m.id !== mealToDeleteId);
+    const currentRecentMeals = recentMeals.filter(m => !selectedMealsForDeletion.includes(m.id));
     setRecentMeals(currentRecentMeals);
-    calculateAndSetDailyTotals(currentRecentMeals.filter(m => !m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')));
+    // Daily totals will be recalculated by the useEffect watching recentMeals
 
-    toast({ title: "Meal Deleted", description: "The meal has been removed.", icon: <Trash2 className="h-5 w-5 text-destructive" /> });
-    setMealToDeleteId(null);
-    setSelectedMealForDeletion(null);
+    toast({ title: `${selectedMealsForDeletion.length} Meal(s) Deleted`, description: "The selected meal(s) have been removed.", icon: <Trash2 className="h-5 w-5 text-destructive" /> });
+    setSelectedMealsForDeletion([]);
     setIsDeleteDialogOpen(false);
   };
-
+  
   const handleInteractionStart = (mealId: string) => {
+    isLongPressRef.current = false;
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
     }
     longPressTimerRef.current = setTimeout(() => {
-      setSelectedMealForDeletion(mealId);
-    }, 700);
+      isLongPressRef.current = true;
+      setSelectedMealsForDeletion(prevSelected => 
+        prevSelected.includes(mealId) ? prevSelected : [...prevSelected, mealId]
+      );
+    }, 400); // Reduced long press time
   };
 
-  const handleInteractionEnd = () => {
+  const router = useRouter();
+  const handleInteractionEnd = (mealId: string, event?: React.MouseEvent | React.TouchEvent) => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
     }
+    if (!isLongPressRef.current) { // It was a tap
+      if (selectedMealsForDeletion.length > 0) { // In selection mode
+         event?.preventDefault(); // Prevent navigation if in selection mode
+        setSelectedMealsForDeletion(prevSelected =>
+          prevSelected.includes(mealId)
+            ? prevSelected.filter(id => id !== mealId)
+            : [...prevSelected, mealId]
+        );
+      } else {
+        // Only navigate if not in selection mode and it was not a long press
+        // router.push(`/meal/${mealId}`); // Navigation handled by Link component by default
+      }
+    }
   };
+  
 
   const processPhotoForAnalysis = async (photoDataUri: string) => {
     const analysisId = `analysis-${crypto.randomUUID()}`;
@@ -216,7 +247,8 @@ export default function DashboardScreen() {
       isAnalyzingPlaceholder: true,
     };
 
-    setRecentMeals(prevMeals => [placeholderMeal, ...prevMeals.filter(m => !m.isAnalyzingPlaceholder)]);
+    setRecentMeals(prevMeals => [placeholderMeal, ...prevMeals.filter(m => !m.isAnalyzingPlaceholder && m.id !== analysisId)]);
+
 
     try {
       const estimationResult = await estimateMealCalories({ photoDataUri });
@@ -243,11 +275,15 @@ export default function DashboardScreen() {
       setToLocalStorage('calSnapMeals', [...storedMeals, newMeal]);
 
       setRecentMeals(prevMeals => {
-        const updated = prevMeals.map(m => m.id === analysisId ? newMeal : m);
-        const currentDayMeals = updated.filter(m => !m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd'));
-        calculateAndSetDailyTotals(currentDayMeals);
-        return currentDayMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5);
+          const updated = prevMeals.map(m => m.id === analysisId ? newMeal : m);
+          // Filter for current date after update
+          const currentDayMeals = updated.filter(m => 
+              (!m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')) || 
+              (m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd'))
+          );
+          return currentDayMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5);
       });
+
 
     } catch (error) {
       console.error("Error estimating calories from dashboard:", error);
@@ -280,27 +316,32 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (selectedMealForDeletion) {
+      if (selectedMealsForDeletion.length > 0) {
         const target = event.target as HTMLElement;
-        const clickedOnMealCard = target.closest(`[data-meal-card-id="${selectedMealForDeletion}"]`);
+        const clickedOnMealCard = recentMeals.some(meal => {
+          const cardElement = document.querySelector(`[data-meal-card-id="${meal.id}"]`);
+          return cardElement && cardElement.contains(target);
+        });
         const clickedOnTrashArea = target.closest('#delete-trash-area-dashboard');
 
         if (!clickedOnMealCard && !clickedOnTrashArea) {
-          setSelectedMealForDeletion(null);
+          setSelectedMealsForDeletion([]);
         }
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside as unknown as EventListener);
+    const touchStartListener = handleClickOutside as unknown as EventListener;
+    document.addEventListener('touchstart', touchStartListener);
+    
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside as unknown as EventListener);
+      document.removeEventListener('touchstart', touchStartListener);
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
       }
     };
-  }, [selectedMealForDeletion]);
+  }, [selectedMealsForDeletion, recentMeals]);
 
 
   let calorieStatus: { value: number; label: string; isOver: boolean; textColor: string };
@@ -323,10 +364,10 @@ export default function DashboardScreen() {
     }
   } else {
     calorieStatus = {
-      value: 0,
-      label: 'Cals Left',
+      value: dailyTotals.calories, // Show total consumed if no goal
+      label: 'Cals Consumed',
       isOver: false,
-      textColor: 'text-primary',
+      textColor: 'text-foreground', // Neutral color
     };
   }
 
@@ -370,7 +411,7 @@ export default function DashboardScreen() {
               day={daysOfWeek[dateItem.getDay()]}
               date={dateItem.getDate()}
               isActive={dateItem.toDateString() === currentDate.toDateString()}
-              onClick={() => {setSelectedMealForDeletion(null); setCurrentDate(dateItem);}}
+              onClick={() => {setSelectedMealsForDeletion([]); setCurrentDate(dateItem);}}
             />
           ))}
         </div>
@@ -480,25 +521,32 @@ export default function DashboardScreen() {
                 }
                 if (format(new Date(meal.timestamp), 'yyyy-MM-dd') !== format(currentDate, 'yyyy-MM-dd')) return null;
 
+                const isSelected = selectedMealsForDeletion.includes(meal.id);
                 return (
                 <Card
                   key={meal.id}
                   data-meal-card-id={meal.id}
                   className={cn(
                     "rounded-2xl shadow-md hover:shadow-lg transition-all bg-card cursor-pointer",
-                    selectedMealForDeletion === meal.id && "ring-2 ring-destructive shadow-xl scale-105"
+                    isSelected && "ring-2 ring-destructive shadow-xl scale-105"
                   )}
                   onMouseDown={() => handleInteractionStart(meal.id)}
-                  onMouseUp={handleInteractionEnd}
+                  onMouseUp={(e) => handleInteractionEnd(meal.id, e)}
                   onTouchStart={() => handleInteractionStart(meal.id)}
-                  onTouchEnd={handleInteractionEnd}
+                  onTouchEnd={(e) => handleInteractionEnd(meal.id, e)}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    handleInteractionStart(meal.id);
+                    isLongPressRef.current = true; // Treat right-click as long press
+                    setSelectedMealsForDeletion(prev => prev.includes(meal.id) ? prev : [...prev, meal.id]);
                   }}
                 >
                   <div className="p-3 flex items-stretch space-x-3">
-                    <Link href={`/meal/${meal.id}`} className="flex-shrink-0" onClick={(e) => { if(selectedMealForDeletion) e.preventDefault();}}>
+                    <Link 
+                        href={`/meal/${meal.id}`} 
+                        className="flex-shrink-0" 
+                        onClick={(e) => { if(selectedMealsForDeletion.length > 0) e.preventDefault();}}
+                        draggable="false"
+                    >
                         {meal.photoDataUri && (
                         <div className="w-20 h-20 relative rounded-lg overflow-hidden">
                             <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} layout="fill" className="object-cover" />
@@ -506,7 +554,12 @@ export default function DashboardScreen() {
                         )}
                     </Link>
                     <div className="flex-grow flex flex-col justify-between py-0.5 min-w-0">
-                        <Link href={`/meal/${meal.id}`} className="block" onClick={(e) => { if(selectedMealForDeletion) e.preventDefault();}}>
+                        <Link 
+                            href={`/meal/${meal.id}`} 
+                            className="block" 
+                            onClick={(e) => { if(selectedMealsForDeletion.length > 0) e.preventDefault();}}
+                            draggable="false"
+                        >
                         <div>
                             <div className="flex justify-between items-start mb-0.5">
                                 <p className="font-semibold text-sm leading-tight text-foreground truncate flex-1 min-w-0 mr-2">{meal.name || "Unnamed Meal"}</p>
@@ -573,19 +626,15 @@ export default function DashboardScreen() {
         </Sheet>
       </div>
 
-      {selectedMealForDeletion && (
+      {selectedMealsForDeletion.length > 0 && (
         <div id="delete-trash-area-dashboard" className="fixed bottom-0 left-0 right-0 p-4 bg-background/80 backdrop-blur-sm border-t border-border flex justify-center items-center z-30">
           <Button
             variant="destructive"
             size="lg"
             className="w-auto px-8 py-4 rounded-xl"
-            onClick={() => {
-              if (selectedMealForDeletion) {
-                openDeleteDialog(selectedMealForDeletion);
-              }
-            }}
+            onClick={openDeleteDialog}
           >
-            <Trash2 className="mr-3 h-6 w-6" /> Delete Selected Meal
+            <Trash2 className="mr-3 h-6 w-6" /> Delete ({selectedMealsForDeletion.length}) Selected
           </Button>
         </div>
       )}
@@ -593,23 +642,19 @@ export default function DashboardScreen() {
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
           setIsDeleteDialogOpen(open);
           if (!open) {
-            setMealToDeleteId(null);
-            setSelectedMealForDeletion(null);
+            // Don't clear selection here, user might just cancel the dialog
           }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitleComponent>Are you sure?</AlertDialogTitleComponent>
+            <AlertDialogTitleComponent>Delete Selected Meal(s)?</AlertDialogTitleComponent>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete this meal.
+              This action cannot be undone. This will permanently delete the selected {selectedMealsForDeletion.length} meal(s).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => {
-              setMealToDeleteId(null);
-              setSelectedMealForDeletion(null);
-            }}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeleteMeal} className="bg-destructive hover:bg-destructive/90">
               Delete
             </AlertDialogAction>
