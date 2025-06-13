@@ -22,17 +22,19 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogTitle as AlertDialogTitleComponent, // Renamed to avoid conflict
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Sheet,
   SheetContent,
+  SheetHeader,
+  SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { estimateMealCalories, type EstimateMealCaloriesOutput } from '@/ai/flows/estimate-meal-calories';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader as DialogHeaderComponent, DialogTitle as DialogTitleComponent, DialogFooter } from '@/components/ui/dialog'; // Renamed to avoid conflict
 
 
 const DayButton = ({ day, date, isActive, onClick }: { day: string; date: number; isActive: boolean; onClick: () => void }) => (
@@ -545,8 +547,11 @@ export default function DashboardScreen() {
             </Button>
           </SheetTrigger>
           <SheetContent side="bottom" className="rounded-t-2xl h-auto p-0 bg-card">
-            <div className="mx-auto mt-3 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
-            <div className="p-5 space-y-1">
+            <SheetHeader className="pt-4 px-5 pb-0 text-center">
+              <div aria-hidden="true" className="mx-auto mb-2 h-1.5 w-12 rounded-full bg-muted-foreground/30" />
+              <SheetTitle className="text-lg font-semibold">Add Meal Options</SheetTitle>
+            </SheetHeader>
+            <div className="p-5 pt-3 space-y-1">
               <Button variant="ghost" className="w-full justify-start text-lg h-auto py-4 pl-3 text-card-foreground hover:bg-secondary" onClick={openCameraModal}>
                 <Camera className="mr-4 h-6 w-6 text-muted-foreground" /> Camera
               </Button>
@@ -595,7 +600,7 @@ export default function DashboardScreen() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitleComponent>Are you sure?</AlertDialogTitleComponent>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete this meal.
             </AlertDialogDescription>
@@ -620,9 +625,9 @@ export default function DashboardScreen() {
         }
       }}>
         <DialogContent className="p-0 border-0 max-w-md w-full bg-card">
-           <DialogHeader className="p-4 border-b">
-            <DialogTitle className="text-lg font-semibold">Take Photo</DialogTitle>
-          </DialogHeader>
+           <DialogHeaderComponent className="p-4 border-b">
+            <DialogTitleComponent className="text-lg font-semibold">Take Photo</DialogTitleComponent>
+          </DialogHeaderComponent>
           <div className="p-4">
             <video ref={videoRef} className="w-full aspect-video rounded-md bg-secondary mb-4" autoPlay muted playsInline />
             {hasCameraPermission === false && (
