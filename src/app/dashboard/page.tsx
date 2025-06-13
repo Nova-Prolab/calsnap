@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation'; // Added import
+import { useRouter } from 'next/navigation';
 import { User, Camera, Plus, AlertTriangle, Trash2, LibraryBig, PenSquare, Heart, Loader2, X as CancelIcon, Check } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,7 @@ export default function DashboardScreen() {
   const [selectedMealsForDeletion, setSelectedMealsForDeletion] = useState<string[]>([]);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isLongPressRef = useRef<boolean>(false);
+  const justOpenedDialogRef = useRef(false); // Flag for delete dialog interaction
 
   const [isAddMealSheetOpen, setIsAddMealSheetOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,11 +113,9 @@ export default function DashboardScreen() {
     
     setRecentMeals([...analyzingPlaceholders, ...selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5-analyzingPlaceholders.length)]);
     calculateAndSetDailyTotals(selectedDateMeals);
-  }, [currentDate]); // Removed recentMeals from dependency array to avoid potential loops
+  }, [currentDate]);
 
   useEffect(() => {
-    // Recalculate totals if recentMeals (excluding placeholders) change for the current date.
-    // This handles updates after meal deletion or analysis completion.
     const currentDayMeals = recentMeals.filter(m => !m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd'));
     calculateAndSetDailyTotals(currentDayMeals);
   }, [recentMeals, currentDate]);
@@ -183,6 +182,7 @@ export default function DashboardScreen() {
 
   const openDeleteDialog = () => {
     if (selectedMealsForDeletion.length > 0) {
+      justOpenedDialogRef.current = true; // Signal that this click is opening the dialog
       setIsDeleteDialogOpen(true);
     }
   };
@@ -196,7 +196,6 @@ export default function DashboardScreen() {
 
     const currentRecentMeals = recentMeals.filter(m => !selectedMealsForDeletion.includes(m.id));
     setRecentMeals(currentRecentMeals);
-    // Daily totals will be recalculated by the useEffect watching recentMeals
 
     toast({ title: `${selectedMealsForDeletion.length} Meal(s) Deleted`, description: "The selected meal(s) have been removed.", icon: <Trash2 className="h-5 w-5 text-destructive" /> });
     setSelectedMealsForDeletion([]);
@@ -213,7 +212,7 @@ export default function DashboardScreen() {
       setSelectedMealsForDeletion(prevSelected => 
         prevSelected.includes(mealId) ? prevSelected : [...prevSelected, mealId]
       );
-    }, 400); // Reduced long press time
+    }, 400); 
   };
 
   const router = useRouter();
@@ -221,17 +220,16 @@ export default function DashboardScreen() {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
     }
-    if (!isLongPressRef.current) { // It was a tap
-      if (selectedMealsForDeletion.length > 0) { // In selection mode
-         event?.preventDefault(); // Prevent navigation if in selection mode
+    if (!isLongPressRef.current) { 
+      if (selectedMealsForDeletion.length > 0) { 
+         event?.preventDefault(); 
         setSelectedMealsForDeletion(prevSelected =>
           prevSelected.includes(mealId)
             ? prevSelected.filter(id => id !== mealId)
             : [...prevSelected, mealId]
         );
       } else {
-        // Only navigate if not in selection mode and it was not a long press
-        // router.push(`/meal/${mealId}`); // Navigation handled by Link component by default
+        // Navigation is handled by Link component
       }
     }
   };
@@ -278,7 +276,6 @@ export default function DashboardScreen() {
 
       setRecentMeals(prevMeals => {
           const updated = prevMeals.map(m => m.id === analysisId ? newMeal : m);
-          // Filter for current date after update
           const currentDayMeals = updated.filter(m => 
               (!m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')) || 
               (m.isAnalyzingPlaceholder && format(new Date(m.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd'))
@@ -317,28 +314,34 @@ export default function DashboardScreen() {
   };
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (justOpenedDialogRef.current) {
+        justOpenedDialogRef.current = false; // Reset flag and ignore this event
+        return;
+      }
+
       if (selectedMealsForDeletion.length > 0) {
         const target = event.target as HTMLElement;
         const clickedOnMealCard = recentMeals.some(meal => {
           const cardElement = document.querySelector(`[data-meal-card-id="${meal.id}"]`);
           return cardElement && cardElement.contains(target);
         });
-        const clickedOnTrashArea = target.closest('#delete-trash-area-dashboard');
+        const clickedOnDeleteBar = target.closest('#delete-trash-area-dashboard');
+        const clickedInsideAlertDialog = target.closest('[role="alertdialog"]');
 
-        if (!clickedOnMealCard && !clickedOnTrashArea) {
+
+        if (!clickedOnMealCard && !clickedOnDeleteBar && !clickedInsideAlertDialog) {
           setSelectedMealsForDeletion([]);
         }
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    const touchStartListener = handleClickOutside as unknown as EventListener;
-    document.addEventListener('touchstart', touchStartListener);
+    document.addEventListener('touchstart', handleClickOutside);
     
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', touchStartListener);
+      document.removeEventListener('touchstart', handleClickOutside);
       if (longPressTimerRef.current) {
         clearTimeout(longPressTimerRef.current);
       }
@@ -366,10 +369,10 @@ export default function DashboardScreen() {
     }
   } else {
     calorieStatus = {
-      value: dailyTotals.calories, // Show total consumed if no goal
+      value: dailyTotals.calories, 
       label: 'Cals Consumed',
       isOver: false,
-      textColor: 'text-foreground', // Neutral color
+      textColor: 'text-foreground', 
     };
   }
 
@@ -535,10 +538,10 @@ export default function DashboardScreen() {
                   onMouseDown={() => handleInteractionStart(meal.id)}
                   onMouseUp={(e) => handleInteractionEnd(meal.id, e)}
                   onTouchStart={() => handleInteractionStart(meal.id)}
-                  onTouchEnd={(e) => handleInteractionEnd(meal.id, e)}
+                  onTouchEnd={(e) => handleInteractionEnd(meal.id, e as unknown as React.TouchEvent)}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    isLongPressRef.current = true; // Treat right-click as long press
+                    isLongPressRef.current = true; 
                     setSelectedMealsForDeletion(prev => prev.includes(meal.id) ? prev : [...prev, meal.id]);
                   }}
                 >
@@ -643,9 +646,6 @@ export default function DashboardScreen() {
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
           setIsDeleteDialogOpen(open);
-          if (!open) {
-            // Don't clear selection here, user might just cancel the dialog
-          }
         }}
       >
         <AlertDialogContent>
@@ -710,5 +710,3 @@ export default function DashboardScreen() {
     </AppWrapper>
   );
 }
-
-    
