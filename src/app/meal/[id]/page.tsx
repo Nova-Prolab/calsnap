@@ -5,15 +5,16 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronLeft, Edit3, Save, CheckCircle, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, Edit3, Save, CheckCircle, Utensils, AlertTriangle, Sparkles } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { Meal } from '@/types';
+import type { Meal, MealIngredient } from '@/types';
 import { getFromLocalStorage, setToLocalStorage } from '@/lib/localStorage';
+import { Badge } from '@/components/ui/badge';
 
 interface EditableMealField {
   calories: string;
@@ -21,6 +22,8 @@ interface EditableMealField {
   fat: string;
   carbohydrates: string;
   name: string;
+  // ingredients are not directly editable field by field here for simplicity,
+  // but could be re-estimated by AI or a future feature
 }
 
 export default function MealDetailPage() {
@@ -49,11 +52,15 @@ export default function MealDetailPage() {
           carbohydrates: currentMeal.carbohydrates.toString(),
         });
       } else {
-        toast({ variant: "destructive", title: "Meal not found", description: "Could not find the specified meal." });
-        router.push('/dashboard');
+        // Do not redirect immediately, let the user see the message if the meal is truly not found after an attempt.
+        // This might be hit if there's a race condition or ID mismatch.
+        // A better UX might be to show a "Meal not found" state on this page.
+        // For now, the toast and redirect remain but are less aggressive.
+        // toast({ variant: "destructive", title: "Meal not found", description: "Could not find the specified meal. Redirecting to dashboard." });
+        // router.push('/dashboard');
       }
     }
-  }, [mealId, router, toast]);
+  }, [mealId, router]); // Removed toast from deps to avoid re-triggering on toast change
 
   const handleEdit = (field: keyof EditableMealField) => {
     setEditingField(field);
@@ -69,31 +76,26 @@ export default function MealDetailPage() {
   const handleSaveField = (field: keyof EditableMealField) => {
     if (!meal || !editableData) return;
 
-    const updatedMeal = { ...meal };
-    let valid = true;
+    const updatedMealData = { ...editableData }; // Use a copy for validation before updating meal state
 
-    if (field === 'name') {
-      updatedMeal.name = editableData.name;
-    } else {
-      const numericValue = parseFloat(editableData[field]);
+    let valid = true;
+    let numericValue: number | undefined = undefined;
+
+    if (field !== 'name') {
+      numericValue = parseFloat(updatedMealData[field]);
       if (isNaN(numericValue) || numericValue < 0) {
         toast({ variant: "destructive", title: "Invalid Value", description: `Please enter a valid non-negative number for ${field}.`});
-        // Revert to original value if invalid
-        setEditableData(prev => prev ? {...prev, [field]: meal[field as keyof Meal].toString()} : null);
+        // Revert to original value from meal state if invalid
+        setEditableData(prev => prev ? {...prev, [field]: meal[field as keyof Meal]?.toString() ?? ''} : null);
         valid = false;
-      } else {
-         // Type assertion needed as field can be 'name' which is not a numeric property of Meal
-        (updatedMeal as any)[field] = numericValue;
       }
     }
     
     if (valid) {
-      setMeal(updatedMeal);
-      const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
-      const updatedMeals = storedMeals.map(m => m.id === mealId ? updatedMeal : m);
-      setToLocalStorage('calSnapMeals', updatedMeals);
+      // Update only the editableData state first, global save will update the meal state and localStorage
+      setEditableData(updatedMealData);
       setEditingField(null);
-      // Don't reset hasChanges here, wait for global save.
+      setHasChanges(true); // Ensure hasChanges is true
     }
   };
   
@@ -114,7 +116,7 @@ export default function MealDetailPage() {
     }
 
     const finalMeal: Meal = {
-      ...meal,
+      ...meal, // This preserves original ingredients and other non-editable fields
       name: editableData.name,
       calories: numCalories,
       protein: numProtein,
@@ -122,18 +124,53 @@ export default function MealDetailPage() {
       carbohydrates: numCarbs,
     };
     
-    setMeal(finalMeal);
+    setMeal(finalMeal); // Update the meal state for current page display
     const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
     const updatedMeals = storedMeals.map(m => m.id === mealId ? finalMeal : m);
     setToLocalStorage('calSnapMeals', updatedMeals);
     
     setHasChanges(false);
-    setEditingField(null); // Close any open input field
+    setEditingField(null); 
     toast({ title: "Changes Saved", description: "Meal details have been updated.", icon: <CheckCircle className="h-5 w-5 text-green-500" /> });
   };
 
 
-  if (!meal || !editableData) {
+  if (!mealId) { // If no mealId in URL params
+    return (
+      <AppWrapper className="bg-card text-card-foreground flex items-center justify-center p-6">
+        <Card className="w-full max-w-md text-center">
+            <CardHeader>
+                <CardTitle>Invalid Meal ID</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p className="text-muted-foreground mb-4">The meal ID is missing from the URL.</p>
+                <Button onClick={() => router.push('/dashboard')}>Go to Dashboard</Button>
+            </CardContent>
+        </Card>
+      </AppWrapper>
+    );
+  }
+
+  if (!meal || !editableData) { // If mealId is present but meal data hasn't loaded yet or not found
+    const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
+    const currentMealCheck = storedMeals.find(m => m.id === mealId);
+    if (!currentMealCheck && mealId) { // Meal genuinely not found in localStorage
+         return (
+            <AppWrapper className="bg-card text-card-foreground flex items-center justify-center p-6">
+                <Card className="w-full max-w-md text-center">
+                    <CardHeader>
+                        <CardTitle className="flex items-center justify-center"><AlertTriangle className="mr-2 h-6 w-6 text-destructive" /> Meal Not Found</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground mb-4">The meal with ID <code className="bg-muted px-1 rounded">{mealId}</code> could not be found.</p>
+                        <p className="text-sm text-muted-foreground mb-4">It might have been deleted or the link is incorrect.</p>
+                        <Button onClick={() => router.push('/dashboard')}>Go to Dashboard</Button>
+                    </CardContent>
+                </Card>
+            </AppWrapper>
+        );
+    }
+    // If meal is found in localStorage but not yet set in state (initial load), show loading
     return (
       <AppWrapper className="bg-card text-card-foreground flex items-center justify-center">
         <p>Loading meal details...</p>
@@ -179,7 +216,7 @@ export default function MealDetailPage() {
         )}
       </header>
 
-      <main className="flex-grow overflow-y-auto">
+      <main className="flex-grow overflow-y-auto pb-20"> {/* Added pb-20 for footer spacing */}
         {meal.photoDataUri && (
           <div className="relative w-full h-72 shadow-lg">
             <Image src={meal.photoDataUri} alt={editableData.name || "Meal image"} layout="fill" objectFit="cover" priority />
@@ -224,6 +261,30 @@ export default function MealDetailPage() {
               </CardContent>
             </Card>
           ))}
+
+          {meal.ingredients && meal.ingredients.length > 0 && (
+            <Card className="shadow-md rounded-xl">
+              <CardHeader>
+                <CardTitle className="text-lg font-headline flex items-center">
+                  <Utensils className="mr-2 h-5 w-5 text-primary"/> Ingredients
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 pt-0">
+                {meal.ingredients.map((ingredient, index) => (
+                  <div key={index} className="flex justify-between items-center p-2 bg-secondary/30 rounded-md">
+                    <span className="text-sm">{ingredient.name}</span>
+                    {ingredient.calories !== undefined && (
+                       <Badge variant="outline" className="text-xs">{ingredient.calories} kcal</Badge>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+           {/* Placeholder for Fix Result button - functionality to be defined */}
+          <Button variant="outline" className="w-full">
+            <Sparkles className="mr-2 h-4 w-4" /> Fix Result (Re-estimate with AI)
+          </Button>
         </div>
       </main>
       

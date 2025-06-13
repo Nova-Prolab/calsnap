@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { estimateMealCalories, type EstimateMealCaloriesOutput } from '@/ai/flows/estimate-meal-calories';
-import type { Meal } from '@/types';
+import type { Meal, MealIngredient } from '@/types';
 import { setToLocalStorage, getFromLocalStorage } from '@/lib/localStorage';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -22,6 +22,7 @@ interface EditableMealData {
   protein: string;
   fat: string;
   carbohydrates: string;
+  ingredients?: MealIngredient[];
 }
 
 export function CalorieEstimationForm() {
@@ -46,6 +47,7 @@ export function CalorieEstimationForm() {
         protein: estimationResult.macronutrientBreakdown.protein.toFixed(1),
         fat: estimationResult.macronutrientBreakdown.fat.toFixed(1),
         carbohydrates: estimationResult.macronutrientBreakdown.carbohydrates.toFixed(1),
+        ingredients: estimationResult.ingredients || [],
       });
     } else {
       setEditableData(null);
@@ -161,14 +163,14 @@ export function CalorieEstimationForm() {
     }
   };
 
-  const handleInputChange = (field: keyof EditableMealData, value: string) => {
+  const handleInputChange = (field: keyof Omit<EditableMealData, 'ingredients'>, value: string) => {
     if (editableData) {
       setEditableData(prev => prev ? { ...prev, [field]: value } : null);
     }
   };
 
   const handleLogMeal = () => {
-    if (!editableData || !photoPreview) { // Ensure photoPreview is also present
+    if (!editableData || !photoPreview) { 
       toast({ title: "No Estimation Data", description: "Please estimate calories first and ensure a photo is present.", variant: "destructive" });
       return;
     }
@@ -184,16 +186,17 @@ export function CalorieEstimationForm() {
       return;
     }
     
-    const mealId = new Date().toISOString() + '-' + Math.random().toString(36).substring(2, 15);
+    const mealId = crypto.randomUUID();
     const newMeal: Meal = {
       id: mealId, 
       name: editableData.name || `Meal at ${new Date().toLocaleTimeString()}`,
-      photoDataUri: photoPreview, // Save the preview which is the captured/uploaded image
+      photoDataUri: photoPreview,
       calories,
       protein,
       fat,
       carbohydrates,
       timestamp: Date.now(),
+      ingredients: editableData.ingredients || [],
     };
 
     const existingMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
@@ -335,6 +338,18 @@ export function CalorieEstimationForm() {
                 />
               </div>
             </div>
+            {editableData.ingredients && editableData.ingredients.length > 0 && (
+              <div>
+                <Label className="font-semibold text-md mb-2 block">Identified Ingredients</Label>
+                <div className="space-y-1 max-h-32 overflow-y-auto bg-card p-2 rounded-md">
+                  {editableData.ingredients.map((ing, index) => (
+                    <div key={index} className="text-sm text-muted-foreground p-1 rounded bg-secondary/50">
+                      {ing.name}{ing.calories ? ` (${ing.calories} kcal)` : ''}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
              <Button onClick={handleEstimate} disabled={isLoading || !photoDataUri} className="w-full bg-primary/80 hover:bg-primary/70 text-primary-foreground text-sm py-2" size="sm">
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                 Re-Estimate with AI

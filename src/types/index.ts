@@ -1,4 +1,9 @@
 
+export interface MealIngredient {
+  name: string;
+  calories?: number;
+}
+
 export interface Meal {
   id: string;
   name?: string; // Optional name for the meal
@@ -8,6 +13,7 @@ export interface Meal {
   fat: number;
   carbohydrates: number;
   timestamp: number;
+  ingredients?: MealIngredient[];
 }
 
 export interface DailyTotals {
