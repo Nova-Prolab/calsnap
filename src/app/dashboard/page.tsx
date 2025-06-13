@@ -4,15 +4,27 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Camera, Plus, AlertTriangle } from 'lucide-react';
+import { User, Camera, Plus, AlertTriangle, Trash2 } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import type { Meal, DailyTotals, CalorieGoals } from '@/types';
-import { getFromLocalStorage } from '@/lib/localStorage';
+import { getFromLocalStorage, setToLocalStorage } from '@/lib/localStorage';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
 
 const DayButton = ({ day, date, isActive, onClick }: { day: string; date: number; isActive: boolean; onClick: () => void }) => (
   <div className="text-center">
@@ -40,6 +52,20 @@ export default function DashboardScreen() {
   const [userGoals, setUserGoals] = useState<CalorieGoals>({ calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isLoadingGoals, setIsLoadingGoals] = useState(true);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [mealToDeleteId, setMealToDeleteId] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const calculateAndSetDailyTotals = (mealsForDate: Meal[]) => {
+    const totals = mealsForDate.reduce((acc, meal) => {
+      acc.calories += meal.calories;
+      acc.protein += meal.protein;
+      acc.fat += meal.fat;
+      acc.carbohydrates += meal.carbohydrates;
+      return acc;
+    }, { calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
+    setDailyTotals(totals);
+  };
 
   useEffect(() => {
     const storedGoals = getFromLocalStorage<CalorieGoals | null>('userCalorieGoals', null);
@@ -55,16 +81,32 @@ export default function DashboardScreen() {
       format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')
     );
     setRecentMeals(selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5)); 
-
-    const totals = selectedDateMeals.reduce((acc, meal) => {
-      acc.calories += meal.calories;
-      acc.protein += meal.protein;
-      acc.fat += meal.fat;
-      acc.carbohydrates += meal.carbohydrates;
-      return acc;
-    }, { calories: 0, protein: 0, fat: 0, carbohydrates: 0 });
-    setDailyTotals(totals);
+    calculateAndSetDailyTotals(selectedDateMeals);
   }, [currentDate]);
+
+  const openDeleteDialog = (id: string) => {
+    setMealToDeleteId(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteMeal = () => {
+    if (!mealToDeleteId) return;
+    
+    const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
+    const updatedMeals = storedMeals.filter(m => m.id !== mealToDeleteId);
+    setToLocalStorage('calSnapMeals', updatedMeals);
+
+    const selectedDateMeals = updatedMeals.filter(meal => 
+      format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')
+    );
+    setRecentMeals(selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5));
+    calculateAndSetDailyTotals(selectedDateMeals);
+    
+    toast({ title: "Meal Deleted", description: "The meal has been removed.", icon: <Trash2 className="h-5 w-5 text-destructive" /> });
+    setMealToDeleteId(null);
+    setIsDeleteDialogOpen(false);
+  };
+
 
   let calorieStatus: { value: number; label: string; isOver: boolean; textColor: string };
 
@@ -105,7 +147,7 @@ export default function DashboardScreen() {
 
   if (isLoadingGoals) {
     return (
-      <AppWrapper className="bg-card text-card-foreground flex items-center justify-center">
+      <AppWrapper className="bg-background text-foreground flex items-center justify-center">
         <p>Loading your data...</p>
       </AppWrapper>
     );
@@ -211,40 +253,51 @@ export default function DashboardScreen() {
           ) : (
             <div className="space-y-4">
               {recentMeals.map(meal => (
-                <Link href={`/meal/${meal.id}`} key={meal.id} className="block">
-                  <Card className="rounded-2xl shadow-md hover:shadow-lg transition-shadow cursor-pointer bg-card">
-                    <CardContent className="p-3 flex items-stretch space-x-3">
-                      {meal.photoDataUri && (
-                        <div className="w-20 h-20 relative rounded-lg overflow-hidden flex-shrink-0">
-                          <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} layout="fill" className="object-cover" />
+                <Card key={meal.id} className="rounded-2xl shadow-md hover:shadow-lg transition-shadow bg-card">
+                  <div className="p-3 flex items-stretch space-x-3">
+                    <Link href={`/meal/${meal.id}`} className="flex-shrink-0">
+                        {meal.photoDataUri && (
+                        <div className="w-20 h-20 relative rounded-lg overflow-hidden">
+                            <Image src={meal.photoDataUri} alt={meal.name || "Logged meal"} layout="fill" className="object-cover" />
                         </div>
-                      )}
-                      <div className="flex-grow flex flex-col justify-between py-0.5">
+                        )}
+                    </Link>
+                    <div className="flex-grow flex flex-col justify-between py-0.5">
+                        <Link href={`/meal/${meal.id}`} className="block">
                         <div>
-                          <div className="flex justify-between items-start mb-0.5">
+                            <div className="flex justify-between items-start mb-0.5">
                             <p className="font-semibold text-sm leading-tight text-foreground truncate pr-2" style={{maxWidth: 'calc(100% - 40px)'}}>{meal.name || "Unnamed Meal"}</p>
                             <p className="text-xs text-muted-foreground flex-shrink-0">{format(new Date(meal.timestamp), 'HH:mm')}</p>
-                          </div>
-                          <p className="text-lg font-bold text-primary">{meal.calories} Calories</p>
+                            </div>
+                            <p className="text-lg font-bold text-primary">{meal.calories} Calories</p>
                         </div>
                         <div className="flex items-center space-x-3 mt-1">
-                          <div className="flex items-center">
+                            <div className="flex items-center">
                             <MacroIcon letter="P" bgColorClass="bg-chart-1" />
                             <span className="text-xs text-muted-foreground">{meal.protein}g</span>
-                          </div>
-                          <div className="flex items-center">
+                            </div>
+                            <div className="flex items-center">
                             <MacroIcon letter="F" bgColorClass="bg-chart-4" />
                             <span className="text-xs text-muted-foreground">{meal.fat}g</span>
-                          </div>
-                          <div className="flex items-center">
+                            </div>
+                            <div className="flex items-center">
                             <MacroIcon letter="C" bgColorClass="bg-chart-3" />
                             <span className="text-xs text-muted-foreground">{meal.carbohydrates}g</span>
-                          </div>
+                            </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                        </Link>
+                    </div>
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="self-start text-muted-foreground hover:text-destructive h-8 w-8"
+                        onClick={(e) => { e.stopPropagation(); openDeleteDialog(meal.id); }}
+                        aria-label="Delete meal"
+                    >
+                        <Trash2 size={18} />
+                    </Button>
+                  </div>
+                </Card>
               ))}
             </div>
           )}
@@ -258,6 +311,23 @@ export default function DashboardScreen() {
           </Button>
         </Link>
       </div>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete this meal.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setMealToDeleteId(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteMeal} className="bg-destructive hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppWrapper>
   );
 }

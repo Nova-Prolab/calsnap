@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronLeft, Edit3, Save, CheckCircle, Utensils, AlertTriangle, Sparkles, X } from 'lucide-react';
+import { ChevronLeft, Edit3, Save, CheckCircle, Utensils, AlertTriangle, Sparkles, X, Trash2 } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,17 @@ import { useToast } from '@/hooks/use-toast';
 import type { Meal, MealIngredient } from '@/types';
 import { getFromLocalStorage, setToLocalStorage } from '@/lib/localStorage';
 import { Badge } from '@/components/ui/badge';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface EditableMealData {
   calories: string;
@@ -37,6 +48,7 @@ export default function MealDetailPage() {
   const [editingField, setEditingField] = useState<keyof Omit<EditableMealData, 'ingredients'> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [isClientReady, setIsClientReady] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     setIsClientReady(true);
@@ -57,7 +69,7 @@ export default function MealDetailPage() {
           ingredients: currentMeal.ingredients || [],
         });
       } else {
-        setMeal(null); // Explicitly set to null if not found on client
+        setMeal(null); 
         setEditableData(null);
       }
     }
@@ -142,10 +154,19 @@ export default function MealDetailPage() {
     toast({ title: "Changes Saved", description: "Meal details have been updated.", icon: <CheckCircle className="h-5 w-5 text-green-500" /> });
   };
 
+  const handleDeleteMeal = () => {
+    if (!mealId) return;
+    const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
+    const updatedMeals = storedMeals.filter(m => m.id !== mealId);
+    setToLocalStorage('calSnapMeals', updatedMeals);
+    toast({ title: "Meal Deleted", description: "The meal has been removed from your log.", icon: <Trash2 className="h-5 w-5 text-destructive" /> });
+    router.push('/dashboard');
+  };
+
+
   if (!isClientReady) {
-    // Render a consistent loading state for SSR and initial client render
     return (
-      <AppWrapper className="bg-card text-card-foreground flex items-center justify-center">
+      <AppWrapper className="bg-background text-foreground flex items-center justify-center">
         <p>Loading meal details...</p>
       </AppWrapper>
     );
@@ -153,7 +174,7 @@ export default function MealDetailPage() {
 
   if (!mealId) {
     return (
-      <AppWrapper className="bg-card text-card-foreground flex items-center justify-center p-6">
+      <AppWrapper className="bg-background text-foreground flex items-center justify-center p-6">
         <Card className="w-full max-w-md text-center">
             <CardHeader>
                 <CardTitle>Invalid Meal ID</CardTitle>
@@ -167,9 +188,9 @@ export default function MealDetailPage() {
     );
   }
 
-  if (!meal) { // This check now happens after client is ready
+  if (!meal) { 
      return (
-        <AppWrapper className="bg-card text-card-foreground flex items-center justify-center p-6">
+        <AppWrapper className="bg-background text-foreground flex items-center justify-center p-6">
             <Card className="w-full max-w-md text-center">
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center"><AlertTriangle className="mr-2 h-6 w-6 text-destructive" /> Meal Not Found</CardTitle>
@@ -184,9 +205,9 @@ export default function MealDetailPage() {
     );
   }
   
-  if (!editableData) { // Fallback if meal is somehow set but editableData isn't
+  if (!editableData) { 
     return (
-      <AppWrapper className="bg-card text-card-foreground flex items-center justify-center">
+      <AppWrapper className="bg-background text-foreground flex items-center justify-center">
         <p>Preparing meal data...</p>
       </AppWrapper>
     );
@@ -277,12 +298,12 @@ export default function MealDetailPage() {
 
           {editableData.ingredients && editableData.ingredients.length > 0 && (
             <Card className="shadow-md rounded-xl">
-              <CardHeader>
+              <CardHeader className="pb-2 pt-4 px-4">
                 <CardTitle className="text-lg font-headline flex items-center">
                   <Utensils className="mr-2 h-5 w-5 text-primary"/> Ingredients
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2 pt-0">
+              <CardContent className="space-y-2 pt-2 px-4 pb-4">
                 {editableData.ingredients.map((ingredient, index) => (
                   <div key={index} className="flex justify-between items-center p-2 bg-secondary/30 rounded-md group transition-all hover:bg-secondary/50">
                     <span className="text-sm flex-grow">
@@ -312,6 +333,30 @@ export default function MealDetailPage() {
           <Button variant="outline" className="w-full">
             <Sparkles className="mr-2 h-4 w-4" /> Fix Result (Re-estimate with AI)
           </Button>
+
+          <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" className="w-full mt-2">
+                <Trash2 className="mr-2 h-4 w-4" /> Delete Meal
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This action cannot be undone. This will permanently delete this meal
+                  from your log.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteMeal} className="bg-destructive hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
         </div>
       </main>
       
