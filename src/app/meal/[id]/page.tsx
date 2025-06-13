@@ -281,7 +281,7 @@ export default function MealDetailPage() {
                 variant="ghost" 
                 size="icon" 
                 onClick={handleToggleFavorite} 
-                className="h-9 w-9 transform active:scale-110 transition-transform duration-150 ease-out focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="h-9 w-9 transform active:scale-110 transition-transform duration-150 ease-out focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:bg-transparent"
                 aria-label={editableData.isFavorite ? "Unmark as favorite" : "Mark as favorite"}
             >
                 <Heart size={20} className={cn(editableData.isFavorite ? "fill-red-500 text-red-500" : "text-foreground")} />
@@ -435,3 +435,4 @@ export default function MealDetailPage() {
     </AppWrapper>
   );
 }
+
