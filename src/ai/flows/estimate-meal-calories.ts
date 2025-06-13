@@ -23,6 +23,8 @@ export type EstimateMealCaloriesInput = z.infer<typeof EstimateMealCaloriesInput
 
 const IngredientSchema = z.object({
   name: z.string().describe('The name of the ingredient.'),
+  quantity: z.string().optional().describe('The estimated quantity of the ingredient (e.g., "100", "1/2", "2").'),
+  unit: z.string().optional().describe('The unit for the quantity (e.g., "g", "cup", "oz", "piece", "slice").'),
   calories: z.number().optional().describe('The estimated calorie count of the ingredient, if available.'),
 });
 
@@ -34,7 +36,7 @@ const EstimateMealCaloriesOutputSchema = z.object({
     fat: z.number().describe('The estimated fat content of the meal in grams.'),
     carbohydrates: z.number().describe('The estimated carbohydrate content of the meal in grams.'),
   }).describe('The estimated macronutrient breakdown of the meal.'),
-  ingredients: z.array(IngredientSchema).optional().describe('A list of identified ingredients with their estimated calorie counts, if available.'),
+  ingredients: z.array(IngredientSchema).optional().describe('A list of identified ingredients with their estimated quantity, unit, and calorie counts, if available.'),
 });
 export type EstimateMealCaloriesOutput = z.infer<typeof EstimateMealCaloriesOutputSchema>;
 
@@ -52,13 +54,13 @@ const prompt = ai.definePrompt({
   1. A suggested short, descriptive name for the meal (e.g., "Chicken Salad", "Spaghetti Bolognese").
   2. An estimate of its total calorie count.
   3. Its macronutrient breakdown (protein, fat, and carbohydrates in grams).
-  4. A list of identified ingredients. For each ingredient, provide its name and an estimated calorie count if possible. Format this as an array of objects, where each object has a "name" (string) and "calories" (number, optional).
+  4. A list of identified ingredients. For each ingredient, provide its name, estimated quantity (e.g., "100", "1/2", "2"), the unit for the quantity (e.g., "g", "cup", "oz", "piece", "slice"), and an estimated calorie count if possible. Format this as an array of objects.
 
   Photo: {{media url=photoDataUri}}
 
   Ensure the calorie estimate and macronutrient breakdown are realistic and appropriate for the meal depicted in the photo.
   The suggested name should be concise and accurately reflect the meal.
-  The ingredient list should be as accurate as possible based on the visual information.
+  The ingredient list should be as accurate as possible based on the visual information, including quantity and unit where applicable.
 
   Output the suggested name, calorie estimate as a number, the macronutrient breakdown as an object with protein, fat, and carbohydrates (each as a number in grams), and the list of ingredients according to the schema.
 
@@ -77,3 +79,4 @@ const estimateMealCaloriesFlow = ai.defineFlow(
     return output!;
   }
 );
+

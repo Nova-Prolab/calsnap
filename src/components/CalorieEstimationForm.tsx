@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Camera, Loader2, Send, Edit3, Save } from 'lucide-react';
+import { Camera, Loader2, Send, Edit3, Save, Utensils, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { estimateMealCalories, type EstimateMealCaloriesOutput } from '@/ai/flow
 import type { Meal, MealIngredient } from '@/types';
 import { setToLocalStorage, getFromLocalStorage } from '@/lib/localStorage';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from '@/components/ui/badge';
 
 
 interface EditableMealData {
@@ -136,7 +137,7 @@ export function CalorieEstimationForm() {
         setEditableData(null);
       };
       reader.readAsDataURL(file);
-      if (useCamera && stream) { // Turn off camera if file is uploaded
+      if (useCamera && stream) { 
         stream.getTracks().forEach(track => track.stop());
         setStream(null);
         setUseCamera(false);
@@ -166,6 +167,13 @@ export function CalorieEstimationForm() {
   const handleInputChange = (field: keyof Omit<EditableMealData, 'ingredients'>, value: string) => {
     if (editableData) {
       setEditableData(prev => prev ? { ...prev, [field]: value } : null);
+    }
+  };
+
+  const handleDeleteIngredient = (indexToDelete: number) => {
+    if (editableData && editableData.ingredients) {
+      const updatedIngredients = editableData.ingredients.filter((_, index) => index !== indexToDelete);
+      setEditableData(prev => prev ? { ...prev, ingredients: updatedIngredients } : null);
     }
   };
 
@@ -340,11 +348,29 @@ export function CalorieEstimationForm() {
             </div>
             {editableData.ingredients && editableData.ingredients.length > 0 && (
               <div>
-                <Label className="font-semibold text-md mb-2 block">Identified Ingredients</Label>
-                <div className="space-y-1 max-h-32 overflow-y-auto bg-card p-2 rounded-md">
+                <Label className="font-semibold text-md mb-2 block flex items-center"><Utensils className="mr-2 h-4 w-4 text-primary" /> Identified Ingredients</Label>
+                <div className="space-y-1 max-h-40 overflow-y-auto bg-card p-2 rounded-md border">
                   {editableData.ingredients.map((ing, index) => (
-                    <div key={index} className="text-sm text-muted-foreground p-1 rounded bg-secondary/50">
-                      {ing.name}{ing.calories ? ` (${ing.calories} kcal)` : ''}
+                    <div key={index} className="text-sm p-1.5 rounded bg-secondary/50 flex justify-between items-center group">
+                       <span className="flex-grow">
+                        {ing.name}
+                        {ing.quantity && ing.unit && (
+                          <span className="text-xs text-muted-foreground ml-1">
+                            ({ing.quantity} {ing.unit})
+                          </span>
+                        )}
+                      </span>
+                      <div className="flex items-center shrink-0">
+                        {ing.calories !== undefined && (
+                          <Badge variant="outline" className="text-xs mr-1">{ing.calories} kcal</Badge>
+                        )}
+                        <Button variant="ghost" size="icon" 
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-destructive hover:text-destructive/80" 
+                                onClick={() => handleDeleteIngredient(index)}>
+                          <X size={14} />
+                          <span className="sr-only">Remove ingredient</span>
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -367,3 +393,4 @@ export function CalorieEstimationForm() {
     </Card>
   );
 }
+

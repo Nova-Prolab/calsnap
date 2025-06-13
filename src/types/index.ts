@@ -1,6 +1,9 @@
 
+
 export interface MealIngredient {
   name: string;
+  quantity?: string;
+  unit?: string;
   calories?: number;
 }
 
@@ -42,3 +45,4 @@ export interface OnboardingData {
   activityLevel?: ActivityLevel;
   goal?: Goal;
 }
+

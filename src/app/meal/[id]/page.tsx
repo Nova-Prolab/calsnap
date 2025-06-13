@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ChevronLeft, Edit3, Save, CheckCircle, Utensils, AlertTriangle, Sparkles } from 'lucide-react';
+import { ChevronLeft, Edit3, Save, CheckCircle, Utensils, AlertTriangle, Sparkles, X } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,14 +16,13 @@ import type { Meal, MealIngredient } from '@/types';
 import { getFromLocalStorage, setToLocalStorage } from '@/lib/localStorage';
 import { Badge } from '@/components/ui/badge';
 
-interface EditableMealField {
+interface EditableMealData {
   calories: string;
   protein: string;
   fat: string;
   carbohydrates: string;
   name: string;
-  // ingredients are not directly editable field by field here for simplicity,
-  // but could be re-estimated by AI or a future feature
+  ingredients?: MealIngredient[];
 }
 
 export default function MealDetailPage() {
@@ -34,8 +33,8 @@ export default function MealDetailPage() {
   const mealId = typeof params.id === 'string' ? params.id : undefined;
 
   const [meal, setMeal] = useState<Meal | null>(null);
-  const [editableData, setEditableData] = useState<EditableMealField | null>(null);
-  const [editingField, setEditingField] = useState<keyof EditableMealField | null>(null);
+  const [editableData, setEditableData] = useState<EditableMealData | null>(null);
+  const [editingField, setEditingField] = useState<keyof Omit<EditableMealData, 'ingredients'> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
@@ -50,52 +49,52 @@ export default function MealDetailPage() {
           protein: currentMeal.protein.toString(),
           fat: currentMeal.fat.toString(),
           carbohydrates: currentMeal.carbohydrates.toString(),
+          ingredients: currentMeal.ingredients || [],
         });
-      } else {
-        // Do not redirect immediately, let the user see the message if the meal is truly not found after an attempt.
-        // This might be hit if there's a race condition or ID mismatch.
-        // A better UX might be to show a "Meal not found" state on this page.
-        // For now, the toast and redirect remain but are less aggressive.
-        // toast({ variant: "destructive", title: "Meal not found", description: "Could not find the specified meal. Redirecting to dashboard." });
-        // router.push('/dashboard');
       }
     }
-  }, [mealId, router]); // Removed toast from deps to avoid re-triggering on toast change
+  }, [mealId]); 
 
-  const handleEdit = (field: keyof EditableMealField) => {
+  const handleEdit = (field: keyof Omit<EditableMealData, 'ingredients'>) => {
     setEditingField(field);
   };
 
-  const handleInputChange = (field: keyof EditableMealField, value: string) => {
+  const handleInputChange = (field: keyof Omit<EditableMealData, 'ingredients'>, value: string) => {
     if (editableData) {
       setEditableData({ ...editableData, [field]: value });
       setHasChanges(true);
     }
   };
 
-  const handleSaveField = (field: keyof EditableMealField) => {
+  const handleSaveField = (field: keyof Omit<EditableMealData, 'ingredients'>) => {
     if (!meal || !editableData) return;
 
-    const updatedMealData = { ...editableData }; // Use a copy for validation before updating meal state
+    const updatedMealData = { ...editableData }; 
 
     let valid = true;
     let numericValue: number | undefined = undefined;
 
     if (field !== 'name') {
-      numericValue = parseFloat(updatedMealData[field]);
+      numericValue = parseFloat(updatedMealData[field as keyof Omit<EditableMealData, 'name' | 'ingredients'>]);
       if (isNaN(numericValue) || numericValue < 0) {
         toast({ variant: "destructive", title: "Invalid Value", description: `Please enter a valid non-negative number for ${field}.`});
-        // Revert to original value from meal state if invalid
         setEditableData(prev => prev ? {...prev, [field]: meal[field as keyof Meal]?.toString() ?? ''} : null);
         valid = false;
       }
     }
     
     if (valid) {
-      // Update only the editableData state first, global save will update the meal state and localStorage
       setEditableData(updatedMealData);
       setEditingField(null);
-      setHasChanges(true); // Ensure hasChanges is true
+      setHasChanges(true); 
+    }
+  };
+
+  const handleDeleteIngredient = (indexToDelete: number) => {
+    if (editableData && editableData.ingredients) {
+      const updatedIngredients = editableData.ingredients.filter((_, index) => index !== indexToDelete);
+      setEditableData(prev => prev ? { ...prev, ingredients: updatedIngredients } : null);
+      setHasChanges(true);
     }
   };
   
@@ -116,15 +115,16 @@ export default function MealDetailPage() {
     }
 
     const finalMeal: Meal = {
-      ...meal, // This preserves original ingredients and other non-editable fields
+      ...meal,
       name: editableData.name,
       calories: numCalories,
       protein: numProtein,
       fat: numFat,
       carbohydrates: numCarbs,
+      ingredients: editableData.ingredients || [], 
     };
     
-    setMeal(finalMeal); // Update the meal state for current page display
+    setMeal(finalMeal);
     const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
     const updatedMeals = storedMeals.map(m => m.id === mealId ? finalMeal : m);
     setToLocalStorage('calSnapMeals', updatedMeals);
@@ -135,7 +135,7 @@ export default function MealDetailPage() {
   };
 
 
-  if (!mealId) { // If no mealId in URL params
+  if (!mealId) {
     return (
       <AppWrapper className="bg-card text-card-foreground flex items-center justify-center p-6">
         <Card className="w-full max-w-md text-center">
@@ -151,10 +151,10 @@ export default function MealDetailPage() {
     );
   }
 
-  if (!meal || !editableData) { // If mealId is present but meal data hasn't loaded yet or not found
+  if (!meal || !editableData) {
     const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
     const currentMealCheck = storedMeals.find(m => m.id === mealId);
-    if (!currentMealCheck && mealId) { // Meal genuinely not found in localStorage
+    if (!currentMealCheck && mealId) { 
          return (
             <AppWrapper className="bg-card text-card-foreground flex items-center justify-center p-6">
                 <Card className="w-full max-w-md text-center">
@@ -170,7 +170,6 @@ export default function MealDetailPage() {
             </AppWrapper>
         );
     }
-    // If meal is found in localStorage but not yet set in state (initial load), show loading
     return (
       <AppWrapper className="bg-card text-card-foreground flex items-center justify-center">
         <p>Loading meal details...</p>
@@ -178,7 +177,7 @@ export default function MealDetailPage() {
     );
   }
   
-  const nutrientFields: { key: keyof Omit<EditableMealField, 'name'>; label: string; unit: string, iconColor: string, iconInitial: string }[] = [
+  const nutrientFields: { key: keyof Omit<EditableMealData, 'name' | 'ingredients'>; label: string; unit: string, iconColor: string, iconInitial: string }[] = [
     { key: 'calories', label: 'Calories', unit: 'kcal', iconColor: 'bg-primary', iconInitial: 'C' },
     { key: 'protein', label: 'Protein', unit: 'g', iconColor: 'bg-chart-1', iconInitial: 'P' },
     { key: 'fat', label: 'Fat', unit: 'g', iconColor: 'bg-chart-4', iconInitial: 'F' },
@@ -216,7 +215,7 @@ export default function MealDetailPage() {
         )}
       </header>
 
-      <main className="flex-grow overflow-y-auto pb-20"> {/* Added pb-20 for footer spacing */}
+      <main className="flex-grow overflow-y-auto pb-20">
         {meal.photoDataUri && (
           <div className="relative w-full h-72 shadow-lg">
             <Image src={meal.photoDataUri} alt={editableData.name || "Meal image"} layout="fill" objectFit="cover" priority />
@@ -262,7 +261,7 @@ export default function MealDetailPage() {
             </Card>
           ))}
 
-          {meal.ingredients && meal.ingredients.length > 0 && (
+          {editableData.ingredients && editableData.ingredients.length > 0 && (
             <Card className="shadow-md rounded-xl">
               <CardHeader>
                 <CardTitle className="text-lg font-headline flex items-center">
@@ -270,18 +269,32 @@ export default function MealDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 pt-0">
-                {meal.ingredients.map((ingredient, index) => (
-                  <div key={index} className="flex justify-between items-center p-2 bg-secondary/30 rounded-md">
-                    <span className="text-sm">{ingredient.name}</span>
-                    {ingredient.calories !== undefined && (
-                       <Badge variant="outline" className="text-xs">{ingredient.calories} kcal</Badge>
-                    )}
+                {editableData.ingredients.map((ingredient, index) => (
+                  <div key={index} className="flex justify-between items-center p-2 bg-secondary/30 rounded-md group transition-all hover:bg-secondary/50">
+                    <span className="text-sm flex-grow">
+                      {ingredient.name}
+                      {ingredient.quantity && ingredient.unit && (
+                        <span className="text-xs text-muted-foreground ml-1">
+                          ({ingredient.quantity} {ingredient.unit})
+                        </span>
+                      )}
+                    </span>
+                    <div className='flex items-center shrink-0'>
+                      {ingredient.calories !== undefined && (
+                         <Badge variant="outline" className="text-xs mr-2">{ingredient.calories} kcal</Badge>
+                      )}
+                      <Button variant="ghost" size="icon" 
+                              className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 text-destructive hover:text-destructive/80" 
+                              onClick={() => handleDeleteIngredient(index)}>
+                        <X size={16} />
+                        <span className="sr-only">Remove ingredient</span>
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </CardContent>
             </Card>
           )}
-           {/* Placeholder for Fix Result button - functionality to be defined */}
           <Button variant="outline" className="w-full">
             <Sparkles className="mr-2 h-4 w-4" /> Fix Result (Re-estimate with AI)
           </Button>
@@ -298,3 +311,4 @@ export default function MealDetailPage() {
     </AppWrapper>
   );
 }
+
