@@ -1,9 +1,10 @@
+
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Camera, Loader2, Send } from 'lucide-react';
+import { Camera, Loader2, Send, Edit3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,14 +14,36 @@ import { estimateMealCalories, type EstimateMealCaloriesOutput } from '@/ai/flow
 import type { Meal } from '@/types';
 import { setToLocalStorage, getFromLocalStorage } from '@/lib/localStorage';
 
+interface EditableMealData {
+  name: string;
+  calories: string;
+  protein: string;
+  fat: string;
+  carbohydrates: string;
+}
+
 export function CalorieEstimationForm() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoDataUri, setPhotoDataUri] = useState<string | null>(null);
   const [estimationResult, setEstimationResult] = useState<EstimateMealCaloriesOutput | null>(null);
+  const [editableData, setEditableData] = useState<EditableMealData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [mealName, setMealName] = useState('');
   const router = useRouter();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (estimationResult) {
+      setEditableData({
+        name: estimationResult.suggestedName || '',
+        calories: estimationResult.calorieEstimate.toFixed(0),
+        protein: estimationResult.macronutrientBreakdown.protein.toFixed(1),
+        fat: estimationResult.macronutrientBreakdown.fat.toFixed(1),
+        carbohydrates: estimationResult.macronutrientBreakdown.carbohydrates.toFixed(1),
+      });
+    } else {
+      setEditableData(null);
+    }
+  }, [estimationResult]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -36,7 +59,8 @@ export function CalorieEstimationForm() {
         setPhotoDataUri(readerDataUri.result as string);
       };
       readerDataUri.readAsDataURL(file);
-      setEstimationResult(null); // Clear previous results
+      setEstimationResult(null); 
+      setEditableData(null);
     }
   };
 
@@ -47,6 +71,7 @@ export function CalorieEstimationForm() {
     }
     setIsLoading(true);
     setEstimationResult(null);
+    setEditableData(null);
     try {
       const result = await estimateMealCalories({ photoDataUri });
       setEstimationResult(result);
@@ -58,19 +83,37 @@ export function CalorieEstimationForm() {
     }
   };
 
+  const handleInputChange = (field: keyof EditableMealData, value: string) => {
+    if (editableData) {
+      setEditableData(prev => prev ? { ...prev, [field]: value } : null);
+    }
+  };
+
   const handleLogMeal = () => {
-    if (!estimationResult) {
+    if (!editableData) {
       toast({ title: "No Estimation Data", description: "Please estimate calories first.", variant: "destructive" });
       return;
     }
+
+    const calories = parseFloat(editableData.calories);
+    const protein = parseFloat(editableData.protein);
+    const fat = parseFloat(editableData.fat);
+    const carbohydrates = parseFloat(editableData.carbohydrates);
+
+    if (isNaN(calories) || isNaN(protein) || isNaN(fat) || isNaN(carbohydrates) ||
+        calories < 0 || protein < 0 || fat < 0 || carbohydrates < 0) {
+      toast({ title: "Invalid Nutritional Data", description: "Please ensure all nutritional values are valid numbers.", variant: "destructive" });
+      return;
+    }
+    
     const newMeal: Meal = {
-      id: new Date().toISOString(), // Simple ID
-      name: mealName || undefined,
-      photoDataUri: photoPreview || undefined, // Store preview URI for display
-      calories: estimationResult.calorieEstimate,
-      protein: estimationResult.macronutrientBreakdown.protein,
-      fat: estimationResult.macronutrientBreakdown.fat,
-      carbohydrates: estimationResult.macronutrientBreakdown.carbohydrates,
+      id: new Date().toISOString(), 
+      name: editableData.name || `Meal at ${new Date().toLocaleTimeString()}`,
+      photoDataUri: photoPreview || undefined,
+      calories,
+      protein,
+      fat,
+      carbohydrates,
       timestamp: Date.now(),
     };
 
@@ -108,42 +151,97 @@ export function CalorieEstimationForm() {
           </div>
         </div>
 
-        {photoPreview && (
+        {photoPreview && !estimationResult && !isLoading && (
           <Button onClick={handleEstimate} disabled={isLoading || !photoDataUri} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
             Estimate Calories
           </Button>
         )}
-
-        {estimationResult && (
-          <div className="space-y-4 p-4 border rounded-lg bg-secondary/50">
-            <h3 className="font-semibold text-lg">Estimation:</h3>
-            <p><strong>Calories:</strong> {estimationResult.calorieEstimate.toFixed(0)} kcal</p>
-            <div className="grid grid-cols-3 gap-2 text-sm">
-              <p><strong>Protein:</strong> {estimationResult.macronutrientBreakdown.protein.toFixed(1)}g</p>
-              <p><strong>Fat:</strong> {estimationResult.macronutrientBreakdown.fat.toFixed(1)}g</p>
-              <p><strong>Carbs:</strong> {estimationResult.macronutrientBreakdown.carbohydrates.toFixed(1)}g</p>
+         {isLoading && (
+            <div className="flex justify-center items-center">
+                <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" />
+                <p className="text-muted-foreground">Estimating...</p>
             </div>
-            <div>
-              <Label htmlFor="meal-name" className="mb-1 block text-sm">Meal Name (Optional)</Label>
+        )}
+
+
+        {editableData && estimationResult && (
+          <div className="space-y-4 p-4 border rounded-lg bg-secondary/50">
+            <div className="space-y-2">
+              <Label htmlFor="meal-name" className="font-semibold text-md">Meal Name</Label>
               <Input 
                 id="meal-name" 
                 placeholder="e.g., Chicken Salad Lunch" 
-                value={mealName} 
-                onChange={(e) => setMealName(e.target.value)} 
+                value={editableData.name} 
+                onChange={(e) => handleInputChange('name', e.target.value)} 
                 className="bg-card"
               />
             </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="calories" className="font-semibold text-md">Calories (kcal)</Label>
+                <Input 
+                  id="calories" 
+                  type="number"
+                  value={editableData.calories} 
+                  onChange={(e) => handleInputChange('calories', e.target.value)} 
+                  className="bg-card"
+                  min="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="protein" className="font-semibold text-md">Protein (g)</Label>
+                <Input 
+                  id="protein" 
+                  type="number"
+                  value={editableData.protein} 
+                  onChange={(e) => handleInputChange('protein', e.target.value)} 
+                  className="bg-card"
+                  step="0.1"
+                  min="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="fat" className="font-semibold text-md">Fat (g)</Label>
+                <Input 
+                  id="fat" 
+                  type="number"
+                  value={editableData.fat} 
+                  onChange={(e) => handleInputChange('fat', e.target.value)} 
+                  className="bg-card"
+                  step="0.1"
+                  min="0"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="carbohydrates" className="font-semibold text-md">Carbs (g)</Label>
+                <Input 
+                  id="carbohydrates" 
+                  type="number"
+                  value={editableData.carbohydrates} 
+                  onChange={(e) => handleInputChange('carbohydrates', e.target.value)} 
+                  className="bg-card"
+                  step="0.1"
+                  min="0"
+                />
+              </div>
+            </div>
+             <Button onClick={handleEstimate} disabled={isLoading || !photoDataUri} className="w-full bg-primary/80 hover:bg-primary/70 text-primary-foreground text-sm py-2" size="sm">
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                Re-Estimate with AI
+            </Button>
           </div>
         )}
       </CardContent>
-      {estimationResult && (
+      {editableData && estimationResult && (
         <CardFooter>
           <Button onClick={handleLogMeal} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-            Log This Meal
+            <Edit3 className="mr-2 h-4 w-4" /> Log This Meal
           </Button>
         </CardFooter>
       )}
     </Card>
   );
 }
+
