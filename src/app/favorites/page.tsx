@@ -136,11 +136,11 @@ export default function FavoritesPage() {
                   </Link>
                   <div className="flex-grow flex flex-col justify-between py-0.5 min-w-0">
                     <div>
-                      <div className="flex justify-between items-start mb-0.5">
-                        <Link href={`/meal/${meal.id}`} className="block">
-                            <p className="font-semibold text-sm leading-tight text-foreground truncate flex-1 min-w-0 mr-2 hover:underline">{meal.name || "Unnamed Meal"}</p>
+                      <div className="flex justify-between items-center mb-0.5">
+                        <Link href={`/meal/${meal.id}`} className="block flex-1 min-w-0 mr-2">
+                            <p className="font-semibold text-sm leading-tight text-foreground truncate hover:underline">{meal.name || "Unnamed Meal"}</p>
                         </Link>
-                        <Button variant="ghost" size="icon" onClick={() => openUnfavoriteDialog(meal)} className="h-7 w-7 text-red-500 hover:text-red-600">
+                        <Button variant="ghost" size="icon" onClick={() => openUnfavoriteDialog(meal)} className="h-7 w-7 text-red-500 hover:text-red-600 flex-shrink-0">
                            <Heart size={18} className="fill-current" />
                         </Button>
                       </div>
@@ -166,7 +166,7 @@ export default function FavoritesPage() {
                         <Button 
                             size="sm" 
                             variant="default" 
-                            className="w-full sm:w-auto" // Responsive width
+                            className="w-full sm:w-auto"
                             onClick={() => logFavoriteMealForToday(meal)}
                         >
                             <Utensils className="mr-2 h-4 w-4" /> Log for Today
