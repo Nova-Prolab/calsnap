@@ -62,6 +62,7 @@ export default function MealDetailPage() {
   const [editingField, setEditingField] = useState<keyof Omit<EditableMealData, 'ingredients' | 'healthScore' | 'isFavorite'> | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [isClientReady, setIsClientReady] = useState(false);
+  const [isLoadingMeal, setIsLoadingMeal] = useState(true); // New state for meal data loading
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -70,6 +71,7 @@ export default function MealDetailPage() {
 
   useEffect(() => {
     if (mealId && isClientReady) {
+      setIsLoadingMeal(true); // Start loading meal data
       const storedMeals = getFromLocalStorage<Meal[]>('calSnapMeals', []);
       const currentMeal = storedMeals.find(m => m.id === mealId);
       if (currentMeal) {
@@ -91,6 +93,10 @@ export default function MealDetailPage() {
         setEditableData(null);
         setInitialEditableData(null);
       }
+      setIsLoadingMeal(false); // Finish loading meal data
+    } else if (!mealId && isClientReady) {
+      // If mealId is not present but client is ready, stop loading
+      setIsLoadingMeal(false);
     }
   }, [mealId, isClientReady]); 
 
@@ -205,7 +211,7 @@ export default function MealDetailPage() {
     }
   };
 
-  if (!isClientReady) {
+  if (isLoadingMeal) { // Primary loading check
     return (
       <AppWrapper className="bg-background text-foreground flex items-center justify-center h-screen">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -214,7 +220,7 @@ export default function MealDetailPage() {
     );
   }
 
-  if (!mealId) {
+  if (!mealId && isClientReady) { // Check for mealId after initial loading and client readiness
     return (
       <AppWrapper className="bg-background text-foreground flex items-center justify-center p-6">
         <Card className="w-full max-w-md text-center">
@@ -230,7 +236,7 @@ export default function MealDetailPage() {
     );
   }
 
-  if (!meal || !editableData) { 
+  if (!meal || !editableData) { // Show "Meal Not Found" only if not loading and meal is truly missing
      return (
         <AppWrapper className="bg-background text-foreground flex items-center justify-center p-6">
             <Card className="w-full max-w-md text-center">
