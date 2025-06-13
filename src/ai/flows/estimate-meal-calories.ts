@@ -7,8 +7,6 @@
  * - estimateMealCalories - A function that handles the meal calorie estimation process.
  * - EstimateMealCaloriesInput - The input type for the estimateMealCalories function.
  * - EstimateMealCaloriesOutput - The return type for the estimateMealCalories function.
- * - EstimateMealCaloriesOutputSchema - The Zod schema for the output.
- * - IngredientSchema - The Zod schema for individual ingredients.
  */
 
 import {ai} from '@/ai/genkit';
@@ -23,14 +21,14 @@ const EstimateMealCaloriesInputSchema = z.object({
 });
 export type EstimateMealCaloriesInput = z.infer<typeof EstimateMealCaloriesInputSchema>;
 
-export const IngredientSchema = z.object({
+const IngredientSchema = z.object({
   name: z.string().describe('The name of the ingredient.'),
   quantity: z.string().optional().describe('The estimated quantity of the ingredient (e.g., "100", "1/2", "2").'),
   unit: z.string().optional().describe('The unit for the quantity (e.g., "g", "cup", "oz", "piece", "slice").'),
   calories: z.number().optional().describe('The estimated calorie count of the ingredient, if available.'),
 });
 
-export const EstimateMealCaloriesOutputSchema = z.object({
+const EstimateMealCaloriesOutputSchema = z.object({
   suggestedName: z.string().optional().describe('A short, descriptive name for the meal (e.g., "Chicken Salad", "Spaghetti Bolognese").'),
   calorieEstimate: z.number().describe('The estimated total calorie count of the meal.'),
   macronutrientBreakdown: z.object({

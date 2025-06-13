@@ -6,19 +6,47 @@
  *
  * - estimateMealCaloriesFromText - A function that handles the meal calorie estimation process from text.
  * - EstimateMealCaloriesFromTextInput - The input type for the estimateMealCaloriesFromText function.
- * - EstimateMealCaloriesOutput (shared) - The return type, shared with image-based estimation.
+ * - EstimateMealCaloriesOutput (shared type) - The return type, shared with image-based estimation.
  */
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import type { EstimateMealCaloriesOutput } from './estimate-meal-calories'; // Re-use the output schema
-import { EstimateMealCaloriesOutputSchema, IngredientSchema } from './estimate-meal-calories'; // Re-use the output schema
+import type { EstimateMealCaloriesOutput } from './estimate-meal-calories'; // Re-use the output type
 
 
 const EstimateMealCaloriesFromTextInputSchema = z.object({
   description: z.string().describe('A textual description of the meal (e.g., "A bowl of oatmeal with berries and nuts", "Pepperoni pizza, 2 slices").'),
 });
 export type EstimateMealCaloriesFromTextInput = z.infer<typeof EstimateMealCaloriesFromTextInputSchema>;
+
+// Define IngredientSchema locally as it cannot be imported from a 'use server' file.
+// This definition should be kept in sync with the one in estimate-meal-calories.ts for consistency.
+const IngredientSchema = z.object({
+  name: z.string().describe('The name of the ingredient.'),
+  quantity: z.string().optional().describe('The estimated quantity of the ingredient (e.g., "100", "1/2", "2").'),
+  unit: z.string().optional().describe('The unit for the quantity (e.g., "g", "cup", "oz", "piece", "slice").'),
+  calories: z.number().optional().describe('The estimated calorie count of the ingredient, if available.'),
+});
+
+// Define EstimateMealCaloriesOutputSchema locally.
+// This definition should be kept in sync with the one in estimate-meal-calories.ts for consistency
+// to ensure the shared EstimateMealCaloriesOutput type is compatible.
+const EstimateMealCaloriesOutputSchema = z.object({
+  suggestedName: z.string().optional().describe('A short, descriptive name for the meal (e.g., "Chicken Salad", "Spaghetti Bolognese").'),
+  calorieEstimate: z.number().describe('The estimated total calorie count of the meal.'),
+  macronutrientBreakdown: z.object({
+    protein: z.number().describe('The estimated protein content of the meal in grams.'),
+    fat: z.number().describe('The estimated fat content of the meal in grams.'),
+    carbohydrates: z.number().describe('The estimated carbohydrate content of the meal in grams.'),
+  }).describe('The estimated macronutrient breakdown of the meal.'),
+  calorieExplanation: z.string().optional().describe("A brief explanation for the meal's estimated calorie count."),
+  proteinExplanation: z.string().optional().describe("A brief explanation for the meal's estimated protein content."),
+  fatExplanation: z.string().optional().describe("A brief explanation for the meal's estimated fat content."),
+  carbohydratesExplanation: z.string().optional().describe("A brief explanation for the meal's estimated carbohydrate content."),
+  healthScoreExplanation: z.string().optional().describe("A brief explanation for the meal's health score, if provided."),
+  ingredients: z.array(IngredientSchema).optional().describe('A list of identified ingredients with their estimated quantity, unit, and calorie counts, if available.'),
+  healthScore: z.number().min(0).max(10).optional().describe('A health score for the meal from 0 to 10 (e.g., 8), where 10 is very healthy. Base this on nutritional balance, processing level, etc.'),
+});
 
 
 export async function estimateMealCaloriesFromText(input: EstimateMealCaloriesFromTextInput): Promise<EstimateMealCaloriesOutput> {
@@ -28,7 +56,7 @@ export async function estimateMealCaloriesFromText(input: EstimateMealCaloriesFr
 const prompt = ai.definePrompt({
   name: 'estimateMealCaloriesFromTextPrompt',
   input: {schema: EstimateMealCaloriesFromTextInputSchema},
-  output: {schema: EstimateMealCaloriesOutputSchema}, // Use the shared output schema
+  output: {schema: EstimateMealCaloriesOutputSchema}, // Use the locally defined output schema
   prompt: `You are an AI assistant that estimates the calorie count, macronutrient breakdown, suggests a name, lists ingredients, provides a health score, and offers brief explanations for these estimations for a meal from a textual description.
 
   Analyze the following meal description and provide:
