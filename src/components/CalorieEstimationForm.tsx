@@ -15,7 +15,7 @@ import type { Meal, MealIngredient } from '@/types';
 import { setToLocalStorage, getFromLocalStorage } from '@/lib/localStorage';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from '@/components/ui/badge';
-
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface EditableMealData {
   name: string;
@@ -33,6 +33,7 @@ export function CalorieEstimationForm() {
   const [estimationResult, setEstimationResult] = useState<EstimateMealCaloriesOutput | null>(null);
   const [editableData, setEditableData] = useState<EditableMealData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false); // For new analyzing UI
   const router = useRouter();
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -153,6 +154,7 @@ export function CalorieEstimationForm() {
       return;
     }
     setIsLoading(true);
+    setIsAnalyzing(true);
     setEstimationResult(null);
     setEditableData(null);
     try {
@@ -163,8 +165,20 @@ export function CalorieEstimationForm() {
       toast({ title: "Estimation Failed", description: "Could not estimate calories. Please try again.", variant: "destructive" });
     } finally {
       setIsLoading(false);
+      setIsAnalyzing(false);
     }
   };
+
+  const handleCancelAnalysis = () => {
+    setIsAnalyzing(false);
+    setIsLoading(false);
+    setPhotoPreview(null);
+    setPhotoDataUri(null);
+    setEstimationResult(null);
+    setEditableData(null);
+    // Note: This doesn't cancel the backend AI flow if it's already started.
+  };
+
 
   const handleInputChange = (field: keyof Omit<EditableMealData, 'ingredients' | 'healthScore'>, value: string) => {
     if (editableData) {
@@ -202,7 +216,7 @@ export function CalorieEstimationForm() {
     const mealId = crypto.randomUUID();
     const newMeal: Meal = {
       id: mealId, 
-      name: editableData.name || `Meal at ${new Date().toLocaleTimeString()}`,
+      name: editableData.name || `Meal at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
       photoDataUri: photoPreview,
       calories,
       protein,
@@ -210,8 +224,8 @@ export function CalorieEstimationForm() {
       carbohydrates,
       timestamp: Date.now(),
       ingredients: editableData.ingredients || [],
-      healthScore: estimationResult.healthScore, // Use original from AI
-      isFavorite: false, // Default new meals are not favorite
+      healthScore: estimationResult.healthScore,
+      isFavorite: false,
       calorieExplanation: estimationResult.calorieExplanation,
       proteinExplanation: estimationResult.proteinExplanation,
       fatExplanation: estimationResult.fatExplanation,
@@ -227,195 +241,226 @@ export function CalorieEstimationForm() {
   };
 
   return (
-    <Card className="w-full shadow-xl">
-      <CardHeader>
-        <CardTitle className="font-headline text-2xl">Estimate & Log Meal</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div>
-          <div className="flex justify-between items-center mb-2">
-            <Label htmlFor="meal-photo" className="font-semibold">Meal Photo</Label>
-            <Button variant="outline" size="sm" onClick={handleToggleCamera}>
-              <Camera className="mr-2 h-4 w-4" />
-              {useCamera ? 'Close Camera' : 'Open Camera'}
-            </Button>
-          </div>
+    <>
+      <Card className="w-full shadow-xl">
+        <CardHeader>
+          <CardTitle className="font-headline text-2xl">Estimate & Log Meal</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {!isAnalyzing && (
+            <>
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label htmlFor="meal-photo" className="font-semibold">Meal Photo</Label>
+                  <Button variant="outline" size="sm" onClick={handleToggleCamera}>
+                    <Camera className="mr-2 h-4 w-4" />
+                    {useCamera ? 'Close Camera' : 'Open Camera'}
+                  </Button>
+                </div>
 
-          {useCamera && (
-            <div className="mb-4">
-              <video ref={videoRef} className="w-full aspect-video rounded-md bg-secondary" autoPlay muted playsInline />
-              <canvas ref={canvasRef} className="hidden"></canvas>
-              {hasCameraPermission === false && (
-                <Alert variant="destructive" className="mt-2">
-                  <AlertTitle>Camera Access Required</AlertTitle>
-                  <AlertDescription>
-                    Please allow camera access in your browser settings to use this feature. You might need to refresh the page.
-                  </AlertDescription>
-                </Alert>
-              )}
-               {hasCameraPermission === true && !photoPreview && (
-                 <Button onClick={handleCapturePhoto} className="w-full mt-2 bg-accent hover:bg-accent/90">
-                    Capture Photo
-                 </Button>
-                )}
-            </div>
-          )}
-
-          {!useCamera && (
-            <div className="flex items-center justify-center w-full">
-              <label
-                htmlFor="meal-photo-input"
-                className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-secondary hover:bg-muted border-border"
-              >
-                {photoPreview ? (
-                  <Image src={photoPreview} alt="Meal preview" width={150} height={150} className="object-contain h-full rounded-lg" />
-                ) : (
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6 text-muted-foreground">
-                    <Camera className="w-10 h-10 mb-3" />
-                    <p className="mb-2 text-sm"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                    <p className="text-xs">PNG, JPG, GIF</p>
+                {useCamera && (
+                  <div className="mb-4">
+                    <video ref={videoRef} className="w-full aspect-video rounded-md bg-secondary" autoPlay muted playsInline />
+                    <canvas ref={canvasRef} className="hidden"></canvas>
+                    {hasCameraPermission === false && (
+                      <Alert variant="destructive" className="mt-2">
+                        <AlertTitle>Camera Access Required</AlertTitle>
+                        <AlertDescription>
+                          Please allow camera access in your browser settings to use this feature. You might need to refresh the page.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {hasCameraPermission === true && !photoPreview && (
+                      <Button onClick={handleCapturePhoto} className="w-full mt-2 bg-accent hover:bg-accent/90">
+                          Capture Photo
+                      </Button>
+                      )}
                   </div>
                 )}
-                <Input id="meal-photo-input" type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-              </label>
+
+                {!useCamera && (
+                  <div className="flex items-center justify-center w-full">
+                    <label
+                      htmlFor="meal-photo-input"
+                      className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-secondary hover:bg-muted border-border"
+                    >
+                      {photoPreview ? (
+                        <Image src={photoPreview} alt="Meal preview" width={150} height={150} className="object-contain h-full rounded-lg" />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center pt-5 pb-6 text-muted-foreground">
+                          <Camera className="w-10 h-10 mb-3" />
+                          <p className="mb-2 text-sm"><span className="font-semibold">Click to upload</span> or drag and drop</p>
+                          <p className="text-xs">PNG, JPG</p>
+                        </div>
+                      )}
+                      <Input id="meal-photo-input" type="file" className="hidden" accept="image/png, image/jpeg" onChange={handleFileChange} />
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {photoPreview && !estimationResult && (
+                <Button onClick={handleEstimate} disabled={isLoading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  Estimate Calories
+                </Button>
+              )}
+            </>
+          )}
+
+          {editableData && estimationResult && !isAnalyzing && (
+            <div className="space-y-4 p-4 border rounded-lg bg-secondary/50">
+              <div className="space-y-2">
+                <Label htmlFor="meal-name" className="font-semibold text-md">Meal Name</Label>
+                <Input 
+                  id="meal-name" 
+                  placeholder="e.g., Chicken Salad Lunch" 
+                  value={editableData.name} 
+                  onChange={(e) => handleInputChange('name', e.target.value)} 
+                  className="bg-card"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="calories" className="font-semibold text-md">Calories (kcal)</Label>
+                  <Input 
+                    id="calories" 
+                    type="number"
+                    value={editableData.calories} 
+                    onChange={(e) => handleInputChange('calories', e.target.value)} 
+                    className="bg-card"
+                    min="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="protein" className="font-semibold text-md">Protein (g)</Label>
+                  <Input 
+                    id="protein" 
+                    type="number"
+                    value={editableData.protein} 
+                    onChange={(e) => handleInputChange('protein', e.target.value)} 
+                    className="bg-card"
+                    step="0.1"
+                    min="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fat" className="font-semibold text-md">Fat (g)</Label>
+                  <Input 
+                    id="fat" 
+                    type="number"
+                    value={editableData.fat} 
+                    onChange={(e) => handleInputChange('fat', e.target.value)} 
+                    className="bg-card"
+                    step="0.1"
+                    min="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="carbohydrates" className="font-semibold text-md">Carbs (g)</Label>
+                  <Input 
+                    id="carbohydrates" 
+                    type="number"
+                    value={editableData.carbohydrates} 
+                    onChange={(e) => handleInputChange('carbohydrates', e.target.value)} 
+                    className="bg-card"
+                    step="0.1"
+                    min="0"
+                  />
+                </div>
+              </div>
+              {editableData.healthScore && (
+                   <div className="space-y-2">
+                      <Label htmlFor="health-score" className="font-semibold text-md flex items-center">
+                          <Heart className="mr-2 h-4 w-4 text-pink-500" /> Health Score
+                      </Label>
+                      <Input 
+                      id="health-score" 
+                      type="text"
+                      value={`${editableData.healthScore} / 10`} 
+                      readOnly 
+                      className="bg-card text-muted-foreground"
+                      />
+                  </div>
+              )}
+              {editableData.ingredients && editableData.ingredients.length > 0 && (
+                <div>
+                  <Label className="font-semibold text-md mb-2 block flex items-center"><Utensils className="mr-2 h-4 w-4 text-primary" /> Identified Ingredients</Label>
+                  <div className="space-y-1 max-h-40 overflow-y-auto bg-card p-2 rounded-md border">
+                    {editableData.ingredients.map((ing, index) => (
+                      <div key={index} className="text-sm p-1.5 rounded bg-secondary/50 flex justify-between items-center group">
+                         <span className="flex-grow">
+                          {ing.name}
+                          {ing.quantity && ing.unit && (
+                            <span className="text-xs text-muted-foreground ml-1">
+                              ({ing.quantity} {ing.unit})
+                            </span>
+                          )}
+                        </span>
+                        <div className="flex items-center shrink-0">
+                          {ing.calories !== undefined && (
+                            <Badge variant="outline" className="text-xs mr-1">{ing.calories} kcal</Badge>
+                          )}
+                          <Button variant="ghost" size="icon" 
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-destructive hover:text-destructive/80" 
+                                  onClick={() => handleDeleteIngredient(index)}>
+                            <X size={14} />
+                            <span className="sr-only">Remove ingredient</span>
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+               <Button onClick={handleEstimate} disabled={isLoading} className="w-full bg-primary/80 hover:bg-primary/70 text-primary-foreground text-sm py-2" size="sm">
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  Re-Estimate with AI
+              </Button>
             </div>
           )}
-        </div>
-
-        {photoPreview && !estimationResult && !isLoading && (
-          <Button onClick={handleEstimate} disabled={isLoading || !photoDataUri} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-            Estimate Calories
-          </Button>
-        )}
-         {isLoading && (
-            <div className="flex flex-col justify-center items-center p-4 border rounded-lg bg-secondary/30">
-                <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" />
-                <p className="text-muted-foreground mt-2">AI is estimating your meal...</p>
-            </div>
-        )}
-
-
-        {editableData && estimationResult && (
-          <div className="space-y-4 p-4 border rounded-lg bg-secondary/50">
-            <div className="space-y-2">
-              <Label htmlFor="meal-name" className="font-semibold text-md">Meal Name</Label>
-              <Input 
-                id="meal-name" 
-                placeholder="e.g., Chicken Salad Lunch" 
-                value={editableData.name} 
-                onChange={(e) => handleInputChange('name', e.target.value)} 
-                className="bg-card"
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="calories" className="font-semibold text-md">Calories (kcal)</Label>
-                <Input 
-                  id="calories" 
-                  type="number"
-                  value={editableData.calories} 
-                  onChange={(e) => handleInputChange('calories', e.target.value)} 
-                  className="bg-card"
-                  min="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="protein" className="font-semibold text-md">Protein (g)</Label>
-                <Input 
-                  id="protein" 
-                  type="number"
-                  value={editableData.protein} 
-                  onChange={(e) => handleInputChange('protein', e.target.value)} 
-                  className="bg-card"
-                  step="0.1"
-                  min="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="fat" className="font-semibold text-md">Fat (g)</Label>
-                <Input 
-                  id="fat" 
-                  type="number"
-                  value={editableData.fat} 
-                  onChange={(e) => handleInputChange('fat', e.target.value)} 
-                  className="bg-card"
-                  step="0.1"
-                  min="0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="carbohydrates" className="font-semibold text-md">Carbs (g)</Label>
-                <Input 
-                  id="carbohydrates" 
-                  type="number"
-                  value={editableData.carbohydrates} 
-                  onChange={(e) => handleInputChange('carbohydrates', e.target.value)} 
-                  className="bg-card"
-                  step="0.1"
-                  min="0"
-                />
-              </div>
-            </div>
-            {editableData.healthScore && (
-                 <div className="space-y-2">
-                    <Label htmlFor="health-score" className="font-semibold text-md flex items-center">
-                        <Heart className="mr-2 h-4 w-4 text-pink-500" /> Health Score
-                    </Label>
-                    <Input 
-                    id="health-score" 
-                    type="text" // Display only, not directly editable from here
-                    value={`${editableData.healthScore} / 10`} 
-                    readOnly 
-                    className="bg-card text-muted-foreground"
-                    />
-                </div>
-            )}
-            {editableData.ingredients && editableData.ingredients.length > 0 && (
-              <div>
-                <Label className="font-semibold text-md mb-2 block flex items-center"><Utensils className="mr-2 h-4 w-4 text-primary" /> Identified Ingredients</Label>
-                <div className="space-y-1 max-h-40 overflow-y-auto bg-card p-2 rounded-md border">
-                  {editableData.ingredients.map((ing, index) => (
-                    <div key={index} className="text-sm p-1.5 rounded bg-secondary/50 flex justify-between items-center group">
-                       <span className="flex-grow">
-                        {ing.name}
-                        {ing.quantity && ing.unit && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({ing.quantity} {ing.unit})
-                          </span>
-                        )}
-                      </span>
-                      <div className="flex items-center shrink-0">
-                        {ing.calories !== undefined && (
-                          <Badge variant="outline" className="text-xs mr-1">{ing.calories} kcal</Badge>
-                        )}
-                        <Button variant="ghost" size="icon" 
-                                className="h-5 w-5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-destructive hover:text-destructive/80" 
-                                onClick={() => handleDeleteIngredient(index)}>
-                          <X size={14} />
-                          <span className="sr-only">Remove ingredient</span>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-             <Button onClick={handleEstimate} disabled={isLoading || !photoDataUri} className="w-full bg-primary/80 hover:bg-primary/70 text-primary-foreground text-sm py-2" size="sm">
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                Re-Estimate with AI
+        </CardContent>
+        {editableData && estimationResult && !isAnalyzing &&(
+          <CardFooter>
+            <Button onClick={handleLogMeal} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+              <Save className="mr-2 h-4 w-4" /> Log & View Details
             </Button>
-          </div>
+          </CardFooter>
         )}
-      </CardContent>
-      {editableData && estimationResult && (
-        <CardFooter>
-          <Button onClick={handleLogMeal} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-            <Save className="mr-2 h-4 w-4" /> Log & View Details
-          </Button>
-        </CardFooter>
+      </Card>
+
+      {isAnalyzing && photoPreview && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+          <Card className="w-full max-w-xs shadow-2xl">
+             <div className="relative">
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={handleCancelAnalysis} 
+                    className="absolute top-2 right-2 h-8 w-8 bg-card/70 hover:bg-card text-muted-foreground hover:text-foreground z-10 rounded-full"
+                    aria-label="Cancel analysis"
+                >
+                    <X size={20} />
+                </Button>
+            </div>
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="relative w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 shadow-md">
+                <Image src={photoPreview} alt="Analyzing meal" layout="fill" objectFit="cover" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                  <Loader2 className="w-10 h-10 text-white animate-spin" />
+                </div>
+              </div>
+              <div className="flex-grow space-y-2.5">
+                <p className="font-semibold text-lg text-foreground">Analyzing...</p>
+                <Skeleton className="h-4 w-full bg-muted/70" />
+                <Skeleton className="h-3 w-4/5 bg-muted/60" />
+                <Skeleton className="h-3 w-2/3 bg-muted/50" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
-    </Card>
+    </>
   );
 }
