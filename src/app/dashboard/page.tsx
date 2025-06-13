@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Camera, Plus } from 'lucide-react';
+import { User, Camera, Plus, AlertTriangle } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import type { Meal, DailyTotals, CalorieGoals } from '@/types';
 import { getFromLocalStorage } from '@/lib/localStorage';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const DayButton = ({ day, date, isActive, onClick }: { day: string; date: number; isActive: boolean; onClick: () => void }) => (
   <div className="text-center">
@@ -53,7 +54,7 @@ export default function DashboardScreen() {
     const selectedDateMeals = storedMeals.filter(meal => 
       format(new Date(meal.timestamp), 'yyyy-MM-dd') === format(currentDate, 'yyyy-MM-dd')
     );
-    setRecentMeals(selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5)); // Show latest 5
+    setRecentMeals(selectedDateMeals.sort((a,b) => b.timestamp - a.timestamp).slice(0,5)); 
 
     const totals = selectedDateMeals.reduce((acc, meal) => {
       acc.calories += meal.calories;
@@ -65,7 +66,32 @@ export default function DashboardScreen() {
     setDailyTotals(totals);
   }, [currentDate]);
 
-  const caloriesLeft = Math.max(0, userGoals.calories - dailyTotals.calories);
+  let calorieStatus: { value: number; label: string; isOver: boolean; textColor: string };
+
+  if (userGoals.calories > 0) {
+    if (dailyTotals.calories > userGoals.calories) {
+      calorieStatus = {
+        value: dailyTotals.calories - userGoals.calories,
+        label: 'Cals Over',
+        isOver: true,
+        textColor: 'text-destructive',
+      };
+    } else {
+      calorieStatus = {
+        value: userGoals.calories - dailyTotals.calories,
+        label: 'Cals Left',
+        isOver: false,
+        textColor: 'text-primary',
+      };
+    }
+  } else {
+    calorieStatus = {
+      value: 0,
+      label: 'Cals Left',
+      isOver: false,
+      textColor: 'text-primary',
+    };
+  }
   
   const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
   
@@ -128,15 +154,18 @@ export default function DashboardScreen() {
                   <circle cx="50" cy="50" r="45" strokeWidth="8" fill="transparent" className="stroke-secondary" />
                   <circle
                     cx="50" cy="50" r="45" strokeWidth="8" fill="transparent"
-                    className="stroke-primary"
+                    className={cn("stroke-primary", calorieStatus.isOver && "stroke-destructive")}
                     strokeDasharray={2 * Math.PI * 45}
                     strokeDashoffset={(2 * Math.PI * 45) * (1 - (userGoals.calories > 0 ? Math.min(dailyTotals.calories, userGoals.calories) / userGoals.calories : 0) )}
                     strokeLinecap="round"
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                  <span className="text-2xl font-bold text-primary">{caloriesLeft}</span>
-                  <span className="text-xs text-muted-foreground">Cals Left</span>
+                  <div className={cn("flex items-center", calorieStatus.textColor)}>
+                    {calorieStatus.isOver && userGoals.calories > 0 && <AlertTriangle className="w-5 h-5 mr-1" />}
+                    <span className="text-2xl font-bold">{calorieStatus.value}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{calorieStatus.label}</span>
                 </div>
               </div>
               
@@ -145,17 +174,24 @@ export default function DashboardScreen() {
                   { name: 'Protein', current: dailyTotals.protein, goal: userGoals.protein, colorClass: 'bg-chart-1' }, 
                   { name: 'Fat', current: dailyTotals.fat, goal: userGoals.fat, colorClass: 'bg-chart-4' },       
                   { name: 'Carbs', current: dailyTotals.carbohydrates, goal: userGoals.carbohydrates, colorClass: 'bg-chart-3' }, 
-                ].map(macro => (
-                  <div key={macro.name}>
-                    <div className="text-sm font-semibold mb-0.5">{macro.name}</div>
-                    <div className="text-xs text-muted-foreground">{Math.round(macro.current)}/{macro.goal}g</div>
-                    <Progress 
-                      value={macro.goal > 0 ? Math.min((macro.current / macro.goal) * 100, 100) : 0} 
-                      className="w-24 h-1.5 rounded-full bg-secondary" 
-                      indicatorClassName={macro.colorClass} 
-                    />
-                  </div>
-                ))}
+                ].map(macro => {
+                  const isOverGoal = macro.current > macro.goal && macro.goal > 0;
+                  return (
+                    <div key={macro.name}>
+                      <div className="text-sm font-semibold mb-0.5">{macro.name}</div>
+                      <div className="text-xs text-muted-foreground flex items-center">
+                        <span className={cn(isOverGoal && "text-destructive font-semibold")}>{Math.round(macro.current)}</span>
+                        <span>/{macro.goal}g</span>
+                        {isOverGoal && <AlertTriangle className="w-3 h-3 text-destructive ml-1" />}
+                      </div>
+                      <Progress 
+                        value={macro.goal > 0 ? Math.min((macro.current / macro.goal) * 100, 100) : 0} 
+                        className="w-24 h-1.5 rounded-full bg-secondary" 
+                        indicatorClassName={cn(macro.colorClass, isOverGoal && "bg-destructive")}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </CardContent>
@@ -225,3 +261,4 @@ export default function DashboardScreen() {
     </AppWrapper>
   );
 }
+
