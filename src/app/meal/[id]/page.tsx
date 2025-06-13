@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { ChevronLeft, Edit3, Save, CheckCircle, Utensils, AlertTriangle, Sparkles, X, Trash2, Heart, MoreVertical, RotateCcw } from 'lucide-react';
+import { ChevronLeft, Edit3, Save, CheckCircle, Utensils, AlertTriangle, Sparkles, X, Trash2, Heart, MoreVertical, RotateCcw, Loader2 } from 'lucide-react';
 import { AppWrapper } from '@/components/AppWrapper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -207,8 +207,9 @@ export default function MealDetailPage() {
 
   if (!isClientReady) {
     return (
-      <AppWrapper className="bg-background text-foreground flex items-center justify-center">
-        <p>Loading meal details...</p>
+      <AppWrapper className="bg-background text-foreground flex items-center justify-center h-screen">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-4 text-lg text-muted-foreground">Loading meal details...</p>
       </AppWrapper>
     );
   }
